@@ -1,3 +1,4 @@
+import json
 import time
 import requests
 import os
@@ -64,7 +65,11 @@ def handle_guild_invites():
     sorted_users = get_sorted_users()
     members_to_add = [member for member in get_guild_join_requests(
     ) if member["memberName"] in sorted_users and member["isAcceptable"]]
-
+    unknown_users = [
+        member for member in get_guild_join_requests() if member["memberName"] not in sorted_users]
+    if unknown_users:
+        print(
+            f"Unknown users requesting invites: {json.dumps(unknown_users, indent=0)}")
     response = accept_guild_invites(members_to_add)
     if response.status_code == 200:
         print(f"{len(members_to_add)} Invites accepted successfully.")
@@ -75,5 +80,6 @@ def handle_guild_invites():
 
 if __name__ == "__main__":
     while True:
+        print("Checking for guild invites...")
         handle_guild_invites()
         time.sleep(60)
