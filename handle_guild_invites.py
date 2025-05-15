@@ -42,6 +42,7 @@ def accept_guild_invites(members):
         'POESESSID': os.getenv('POESESSID'),
     }
     headers = {
+        'accept': 'application/json, text/javascript, */*; q=0.01',
         'content-type': 'application/json',
         'user-agent': 'Liberatorist@gmail.com',
     }
@@ -70,8 +71,12 @@ def handle_guild_invites():
     if unknown_users:
         print(
             f"Unknown users requesting invites: {json.dumps(unknown_users, indent=0)}")
+    if not members_to_add:
+        print("No new members to add.")
+        return
     response = accept_guild_invites(members_to_add)
     if response.status_code == 200:
+
         print(f"{len(members_to_add)} Invites accepted successfully.")
     else:
         print(f"Failed to accept invites. Status code: {response.status_code}")
