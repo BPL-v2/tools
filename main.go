@@ -45,17 +45,17 @@ func getMainMenuOptions() []MenuOption {
 	return []MenuOption{
 		{
 			Name:        "Check Player Names",
-			Description: "Check if player names contain their team abbreviations (Requires BPL_TOKEN)",
+			Description: "Check if player names contain their team abbreviations",
 			Action:      showCheckPlayerNamesMenu,
 		},
 		{
 			Name:        "Handle Private League Invites",
-			Description: "Process and accept private league invites for registered players (Requires BPL_TOKEN, POESESSID, PRIVATE_LEAGUE_ID)",
+			Description: "Process and accept private league invites for registered players",
 			Action:      showPrivateLeagueInvitesMenu,
 		},
 		{
 			Name:        "Guild Stash Monitor",
-			Description: "Monitor guild stash changes and sync to BPL backend (Requires BPL_TOKEN, POESESSID, GUILD_ID)",
+			Description: "Monitor guild stash changes and sync to BPL backend",
 			Action:      showGuildStashMenu,
 		},
 		{

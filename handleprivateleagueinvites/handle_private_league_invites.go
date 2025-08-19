@@ -11,7 +11,7 @@ import (
 )
 
 type Member struct {
-	ID           string `json:"id"`
+	ID           int    `json:"id"`
 	MemberName   string `json:"memberName"`
 	Role         string `json:"role"`
 	IsAcceptable bool   `json:"isAcceptable"`
@@ -32,7 +32,7 @@ type User struct {
 
 type AcceptRequest struct {
 	Name  string `json:"name"`
-	Value string `json:"value"`
+	Value int    `json:"value"`
 }
 
 func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, error) {
@@ -51,7 +51,7 @@ func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, 
 	q.Add("search", "")
 	q.Add("offset", "0")
 	q.Add("limit", "100")
-	q.Add("_", "1747331123076")
+	q.Add("_", fmt.Sprintf("%d", time.Now().Unix()))
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := client.Do(req)
