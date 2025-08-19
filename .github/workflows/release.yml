@@ -99,7 +99,7 @@ jobs:
           ### Features
           - **Check Player Names**: Verify player names contain team abbreviations
           - **Handle Private League Invites**: Automatically process private league invitations
-          - **Guild Stash Monitor**: Monitor guild stash changeelogs
+          - **Guild Stash Monitor**: Monitor guild stash changelogs
 
           ### Requirements
           - Valid Path of Exile session ID
