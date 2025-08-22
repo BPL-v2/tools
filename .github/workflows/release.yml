@@ -34,32 +34,23 @@ jobs:
 
       - name: Create release packages
         run: |
-          # Create zip archives with simplified structure (binary directly in zip root)
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools-linux-amd64
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools-windows-amd64.exe  
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools-darwin-amd64
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools-darwin-arm64
+          # Create temporary directories for each platform
+          mkdir -p temp-linux temp-windows temp-darwin-amd64 temp-darwin-arm64
 
-          # Rename binaries inside the zip files to have consistent names
-          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip
-          mv bpl-tools-linux-amd64 bpl-tools
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools
-          rm bpl-tools
+          # Copy and rename binaries to temporary directories
+          cp bpl-tools-linux-amd64 temp-linux/bpl-tools
+          cp bpl-tools-windows-amd64.exe temp-windows/bpl-tools.exe
+          cp bpl-tools-darwin-amd64 temp-darwin-amd64/bpl-tools
+          cp bpl-tools-darwin-arm64 temp-darwin-arm64/bpl-tools
 
-          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip
-          mv bpl-tools-windows-amd64.exe bpl-tools.exe
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools.exe
-          rm bpl-tools.exe
+          # Create zip archives from temporary directories
+          cd temp-linux && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools && cd ..
+          cd temp-windows && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools.exe && cd ..
+          cd temp-darwin-amd64 && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools && cd ..
+          cd temp-darwin-arm64 && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools && cd ..
 
-          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip
-          mv bpl-tools-darwin-amd64 bpl-tools
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools
-          rm bpl-tools
-
-          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip
-          mv bpl-tools-darwin-arm64 bpl-tools
-          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools
-          rm bpl-tools
+          # Clean up temporary directories
+          rm -rf temp-linux temp-windows temp-darwin-amd64 temp-darwin-arm64
 
       - name: Generate release notes
         id: release_notes
