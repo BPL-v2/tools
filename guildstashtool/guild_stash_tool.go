@@ -11,8 +11,9 @@ import (
 	"time"
 )
 
-// var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
-var bplBaseUrl = "http://localhost:8000/api"
+var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
+
+// var bplBaseUrl = "http://localhost:8000/api"
 
 type Client struct {
 	RateLimiter    *RateLimiter
