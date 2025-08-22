@@ -34,51 +34,32 @@ jobs:
 
       - name: Create release packages
         run: |
-          # Create .env file with dummy values
-          cat > release.env << 'EOF'
-          # BPL API Configuration
-          BPL_TOKEN=your_bpl_token_here
+          # Create zip archives with simplified structure (binary directly in zip root)
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools-linux-amd64
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools-windows-amd64.exe  
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools-darwin-amd64
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools-darwin-arm64
 
-          # Path of Exile Session ID
-          POESESSID=your_poe_session_id_here
+          # Rename binaries inside the zip files to have consistent names
+          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip
+          mv bpl-tools-linux-amd64 bpl-tools
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools
+          rm bpl-tools
 
-          # Guild ID for Path of Exile (required for guild stash monitoring)
-          GUILD_ID=your_guild_id_here
+          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip
+          mv bpl-tools-windows-amd64.exe bpl-tools.exe
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools.exe
+          rm bpl-tools.exe
 
-          # Private League ID (required for guild invites)
-          PRIVATE_LEAGUE_ID=your_private_league_id_here
-          EOF
+          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip
+          mv bpl-tools-darwin-amd64 bpl-tools
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools
+          rm bpl-tools
 
-          # Create directories for each platform
-          mkdir -p releases/linux-amd64
-          mkdir -p releases/windows-amd64
-          mkdir -p releases/darwin-amd64
-          mkdir -p releases/darwin-arm64
-
-          # Copy binaries and files to each platform directory
-          cp bpl-tools-linux-amd64 releases/linux-amd64/bpl-tools
-          cp release.env releases/linux-amd64/.env
-          cp README.md releases/linux-amd64/
-
-          cp bpl-tools-windows-amd64.exe releases/windows-amd64/bpl-tools.exe
-          cp release.env releases/windows-amd64/.env
-          cp README.md releases/windows-amd64/
-
-          cp bpl-tools-darwin-amd64 releases/darwin-amd64/bpl-tools
-          cp release.env releases/darwin-amd64/.env
-          cp README.md releases/darwin-amd64/
-
-          cp bpl-tools-darwin-arm64 releases/darwin-arm64/bpl-tools
-          cp release.env releases/darwin-arm64/.env
-          cp README.md releases/darwin-arm64/
-
-          # Create zip archives
-          cd releases
-          zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip linux-amd64/
-          zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip windows-amd64/
-          zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip darwin-amd64/
-          zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip darwin-arm64/
-          cd ..
+          unzip -q bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip
+          mv bpl-tools-darwin-arm64 bpl-tools
+          zip bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools
+          rm bpl-tools
 
       - name: Generate release notes
         id: release_notes
@@ -86,24 +67,29 @@ jobs:
           cat > release_notes.md << 'EOF'
           ## BPL Tools ${{ steps.version.outputs.VERSION }}
 
-          ### Setup Instructions
-          1. Download the appropriate zip file for your platform
-          2. Extract the zip file
-          3. Configure the `.env` file with your actual values:
-             - `BPL_TOKEN`: Your BPL API token
-             - `POESESSID`: Your Path of Exile session ID
-             - `GUILD_ID`: Your guild ID (for guild stash monitoring)
-             - `PRIVATE_LEAGUE_ID`: Your private league ID (for handling private league invites)
-          4. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+          ### Quick Start
+          1. Download the appropriate zip file for your platform below
+          2. Extract the zip file  
+          3. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+          4. The application will automatically prompt you for any required credentials when you first use each feature
 
           ### Features
-          - **Check Player Names**: Verify player names contain team abbreviations
-          - **Handle Private League Invites**: Automatically process private league invitations
-          - **Guild Stash Monitor**: Monitor guild stash changelogs
+          - **Check Player Names**: Verify player names contain team abbreviations (no credentials required)
+          - **Handle Private League Invites**: Automatically process private league invitations  
+          - **Guild Stash Monitor**: Monitor guild stash changes and sync to BPL backend
 
-          ### Requirements
-          - Valid Path of Exile session ID
-          - BPL API access token
+          ### What's New
+          - ✨ **Auto-setup**: No manual configuration required! The app will guide you through entering credentials
+          - 🔒 **Secure input**: Sensitive values are hidden while typing
+          - 💾 **Auto-save**: Credentials are automatically saved for future use
+          - 📋 **Built-in instructions**: Step-by-step guides for obtaining each credential
+          - 🎯 **Simplified releases**: Just download, extract, and run!
+
+          ### Platform Downloads
+          - **Windows**: `bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
+          - **Linux**: `bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip`  
+          - **macOS Intel**: `bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip`
+          - **macOS Apple Silicon**: `bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip`
           EOF
 
       - name: Create Release

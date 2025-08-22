@@ -65,9 +65,9 @@ We need the following input Parameters:
 
 1. Download the latest release from the [Releases page](https://github.com/BPL-v2/tools/releases)
 2. Extract the zip file for your platform
-3. Run the setup script: `./setup.sh` (Linux/macOS) or run `setup.sh` in Git Bash (Windows)
-4. Edit the `.env` file with your actual values (see instructions above)
-5. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+3. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+
+**Note:** No setup required! The application will automatically prompt you for any missing environment variables when you try to use a feature that requires them, and it will save your inputs to the `.env` file for future use.
 
 ### Interactive Menu
 
@@ -76,6 +76,27 @@ The tool provides an easy-to-use interactive menu:
 - Use ↑/↓ arrow keys to navigate
 - Press Enter to select
 - Choose your tool, then choose run mode (once or continuous)
+- When using a feature for the first time, you'll be prompted to enter required credentials
+- The application will offer to show step-by-step instructions for obtaining each credential
+- Sensitive values (tokens, session IDs) are hidden while typing for security
+
+### Environment Variables
+
+The application uses environment variables stored in a `.env` file for configuration. The tool will automatically:
+
+- Prompt you for any missing required environment variables when you first use a feature
+- Offer to show detailed instructions on how to obtain each environment variable
+- Save your inputs to the `.env` file for future use
+- Use hidden input for sensitive values (tokens, session IDs)
+- Load existing values from the `.env` file on startup
+
+Required variables by feature:
+
+- **Check Player Names**: No environment variables required
+- **Handle Private League Invites**: `BPL_TOKEN`, `POESESSID`, `PRIVATE_LEAGUE_ID`
+- **Guild Stash Monitor**: `BPL_TOKEN`, `POESESSID`, `GUILD_ID`
+
+You can still manually edit the `.env` file if needed, or use the provided `.env.example` as a template.
 
 ## Development
 
@@ -104,6 +125,6 @@ git push
 This will automatically:
 
 - Build binaries for all platforms (Linux, Windows, macOS Intel/ARM)
-- Create zip packages with binaries, README, setup script, and .env template
+- Create simplified zip packages with just the executable
 - Create a GitHub release with download links
-- Generate release notes with setup instructions
+- Generate release notes with quick start instructions
