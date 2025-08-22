@@ -6,14 +6,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 )
 
+// var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
+var bplBaseUrl = "http://localhost:8000/api"
+
 type Client struct {
-	RateLimiter *RateLimiter
-	SessionId   string
-	BplJwt      string
-	GuildId     string
+	RateLimiter    *RateLimiter
+	SessionId      string
+	BplJwt         string
+	GuildId        string
+	leagueStart    int64
+	leagueEnd      int64
+	rateLimitState string
 }
 
 type GuildStashChangeResponse struct {
@@ -42,22 +50,60 @@ func NewClient(sessionId, bplJwt, guildId string) *Client {
 	}
 }
 
-func (c *Client) getLatestTimestamp() (int64, error) {
-	url := "https://v2202503259898322516.goodsrv.de/api/current/guild-stash/history/latest_timestamp"
+func (c *Client) getTimestamps() (*GuildStashLogTimestampResponse, error) {
+	url := fmt.Sprintf("%s/current/guilds/%s/stash-history/latest_timestamp", bplBaseUrl, c.GuildId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BplJwt))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer res.Body.Close()
 	body, _ := io.ReadAll(res.Body)
-	var latestTimestamp int64
-	json.Unmarshal(body, &latestTimestamp)
-	return latestTimestamp, nil
+	var timestamps GuildStashLogTimestampResponse
+	if err := json.Unmarshal(body, &timestamps); err != nil {
+		return nil, err
+	}
+	return &timestamps, nil
+}
+
+func (c *Client) updateProgress(message string, currentTimestamp int64) {
+	// Clear the current lines and move cursor up
+	fmt.Print("\033[2K\r")        // Clear current line
+	fmt.Print("\033[1A\033[2K\r") // Move up and clear previous line
+
+	// Display rate limiter state
+	if c.RateLimiter != nil {
+		fmt.Printf("Rate Limiter: %s\n", c.RateLimiter.GetState())
+	}
+
+	if c.leagueStart != 0 && c.leagueEnd != 0 {
+		totalDuration := c.leagueEnd - c.leagueStart
+		// Since we go backwards from end to start, calculate remaining duration
+		remainingDuration := currentTimestamp - c.leagueStart
+		progressDuration := totalDuration - remainingDuration
+
+		// Ensure we don't go over 100% or below 0%
+		if progressDuration > totalDuration {
+			progressDuration = totalDuration
+		}
+		if progressDuration < 0 {
+			progressDuration = 0
+		}
+
+		percentage := int((progressDuration * 100) / totalDuration)
+		bar := strings.Repeat("=", percentage/2)
+		spaces := strings.Repeat(" ", 50-len(bar))
+
+		currentTime := time.Unix(currentTimestamp, 0).Format("2006-01-02 15:04")
+		fmt.Printf("%s [%s%s] %d%% (Current: %s)",
+			message, bar, spaces, percentage, currentTime)
+	} else {
+		fmt.Printf("%s...", message)
+	}
 }
 
 func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newStart int64, latestId string, err error) {
@@ -82,6 +128,14 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 	if resp.StatusCode == http.StatusNotFound {
 		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (Guild not found - Guild ID or PoE Session ID invalid)", resp.StatusCode)
 	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		retry, err := strconv.Atoi(resp.Header.Get("retry-after"))
+		if err != nil {
+			return 0, latestId, fmt.Errorf("HttpStatusCode: %d (Too many requests - Wait 30m before trying again)", resp.StatusCode)
+		}
+		duration := time.Duration(retry) * time.Second
+		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (Too many requests - Wait %v before trying again)", resp.StatusCode, duration)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (PoE Session ID most likely invalid)", resp.StatusCode)
 	}
@@ -89,13 +143,19 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 	if updateErr := c.RateLimiter.UpdateFromResponse(resp); updateErr != nil {
 		fmt.Printf("Warning: Could not update rate limiter: %v\n", updateErr)
 	}
+
 	body, _ := io.ReadAll(resp.Body)
 	unmarshalled := GuildStashChangeResponse{}
 	err = json.Unmarshal(body, &unmarshalled)
 	if err != nil {
 		return 0, latestId, err
 	}
-	fmt.Printf("Requesting stashes from %v to %v - received %d entries\n", time.Unix(end, 0).Format(time.DateTime), time.Unix(start, 0).Format(time.DateTime), len(unmarshalled.Entries))
+
+	if len(unmarshalled.Entries) > 0 {
+		// Use the timestamp of the first entry to show progress
+		firstEntryTimestamp := unmarshalled.Entries[0].Time
+		c.updateProgress("Processing stash history", firstEntryTimestamp)
+	}
 
 	if len(unmarshalled.Entries) == 0 || !unmarshalled.Truncated {
 		return 0, latestId, nil
@@ -106,8 +166,7 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 }
 
 func (c *Client) sendStashHistoryToBplBackend(body []byte) {
-	url := "https://v2202503259898322516.goodsrv.de/api/current/guild-stash/history"
-
+	url := fmt.Sprintf("%s/current/guilds/%s/stash-history", bplBaseUrl, c.GuildId)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
@@ -121,50 +180,83 @@ func (c *Client) sendStashHistoryToBplBackend(body []byte) {
 		return
 	}
 	defer resp.Body.Close()
-	_, err = io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
+	if resp.StatusCode != http.StatusCreated {
+		fmt.Printf("Error status from BPL backend: %v\n", resp.Status)
+		return
+	}
+	var addResponse AddGuildStashHistoryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&addResponse); err != nil {
+		fmt.Printf("Error reading add response: %v\n", err)
 		return
 	}
 }
 
-// RunStashMonitoring runs the guild stash monitoring once
 func RunStashMonitoring(sessionId, bplJwt, guildId string) error {
 	client := NewClient(sessionId, bplJwt, guildId)
 
-	latestTimestamp, err := client.getLatestTimestamp()
+	fmt.Print("Fetching timestamps...")
+	timestamps, err := client.getTimestamps()
 	if err != nil {
 		return fmt.Errorf("error getting latest timestamp: %w", err)
 	}
+	fmt.Print("\rTimestamps fetched successfully\n")
 
-	now := time.Now().Unix()
-	_, _, err = client.getHistoryBetween(now, latestTimestamp, "")
+	// Set league times for progress calculation
+	client.leagueStart = timestamps.LeagueStart
+	client.leagueEnd = timestamps.LeagueEnd
+
+	dayAfterLeagueEnd := timestamps.LeagueEnd + 24*60*60
+	if timestamps.Earliest == nil || timestamps.Latest == nil {
+		_, _, err = client.getHistoryBetween(dayAfterLeagueEnd, timestamps.LeagueStart, "")
+	} else {
+		_, _, err = client.getHistoryBetween(*timestamps.Earliest, timestamps.LeagueStart, "")
+		if err != nil {
+			return fmt.Errorf("error getting history: %w", err)
+		}
+		_, _, err = client.getHistoryBetween(dayAfterLeagueEnd, *timestamps.Latest, "")
+	}
 	if err != nil {
 		return fmt.Errorf("error getting history: %w", err)
 	}
-
-	fmt.Println("Guild stash monitoring completed successfully")
+	fmt.Print("\rGuild stash monitoring completed successfully          \n")
 	return nil
 }
 
-// RunStashMonitoringContinuous runs the guild stash monitoring continuously
-func RunStashMonitoringContinuous(sessionId, bplJwt, guildId string, interval time.Duration) {
+func RunStashMonitoringContinuous(sessionId, bplJwt, guildId string, interval time.Duration) error {
 	client := NewClient(sessionId, bplJwt, guildId)
 
-	latestTimestamp, err := client.getLatestTimestamp()
+	timestamps, err := client.getTimestamps()
 	if err != nil {
-		fmt.Printf("Error getting latest timestamp: %v\n", err)
-		return
+		return err
+	}
+	dayAfterLeagueEnd := timestamps.LeagueEnd + 24*60*60
+	if timestamps.Earliest == nil || timestamps.Latest == nil {
+		_, _, err = client.getHistoryBetween(dayAfterLeagueEnd, timestamps.LeagueStart, "")
+	} else {
+		_, _, err = client.getHistoryBetween(*timestamps.Earliest, timestamps.LeagueStart, "")
+	}
+	if err != nil {
+		return err
 	}
 
 	for {
+		_, _, err = client.getHistoryBetween(dayAfterLeagueEnd, *timestamps.Latest, "")
 		now := time.Now().Unix()
-		_, _, err = client.getHistoryBetween(now, latestTimestamp, "")
-		latestTimestamp = now
+		timestamps.Latest = &now
 		if err != nil {
-			fmt.Printf("Error getting history: %v\n", err)
-			return
+			return err
 		}
 		time.Sleep(interval)
 	}
+}
+
+type AddGuildStashHistoryResponse struct {
+	NumberOfAddedEntries int `json:"number_of_added_entries"`
+}
+
+type GuildStashLogTimestampResponse struct {
+	Earliest    *int64 `json:"earliest"`
+	Latest      *int64 `json:"latest"`
+	LeagueStart int64  `json:"league_start"`
+	LeagueEnd   int64  `json:"league_end"`
 }

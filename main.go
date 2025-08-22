@@ -150,8 +150,7 @@ func runGuildStashContinuous() error {
 
 	fmt.Println("Starting continuous guild stash monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
-	guildstashtool.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
-	return nil
+	return guildstashtool.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
 }
 
 func showRunModeMenu(toolName string, singleAction, continuousAction func() error) error {

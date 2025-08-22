@@ -2,6 +2,7 @@ package guildstashtool
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,29 +10,43 @@ import (
 	"time"
 )
 
-type RateLimiter struct {
-	mutex       sync.Mutex
-	rateLimits  []RateLimit
-	lastUpdated time.Time
+type Policy struct {
+	MaxHits int
+	Period  time.Duration
 }
 
-type RateLimit struct {
-	maxRequests   int
-	windowSeconds int
-	resetSeconds  int
-	currentUsage  int
-	windowStart   time.Time
+func (p *Policy) CurrentHits(requestTimes []time.Time) int {
+	periodStart := time.Now().Add(-p.Period)
+	count := 0
+	for _, t := range requestTimes {
+		if t.After(periodStart) {
+			count++
+		}
+	}
+	return count
+}
+
+func (p *Policy) IsViolated(requestTimes []time.Time) bool {
+	return p.CurrentHits(requestTimes) >= p.MaxHits
+}
+
+type RateLimiter struct {
+	mutex        sync.Mutex
+	policies     []Policy
+	requestTimes []time.Time
+	lastUpdated  time.Time
 }
 
 func NewRateLimiter() *RateLimiter {
 	return &RateLimiter{
-		rateLimits: []RateLimit{
+		policies: []Policy{
 			// Default fallback limits if headers are not available
-			{maxRequests: 60, windowSeconds: 60, resetSeconds: 60},
-			{maxRequests: 120, windowSeconds: 300, resetSeconds: 300},
-			{maxRequests: 300, windowSeconds: 3600, resetSeconds: 3600},
+			{MaxHits: 60, Period: 60 * time.Second},
+			{MaxHits: 120, Period: 300 * time.Second},
+			{MaxHits: 300, Period: 3600 * time.Second},
 		},
-		lastUpdated: time.Now(),
+		requestTimes: make([]time.Time, 0),
+		lastUpdated:  time.Now(),
 	}
 }
 
@@ -62,7 +77,7 @@ func (rl *RateLimiter) UpdateFromResponse(resp *http.Response) error {
 		return fmt.Errorf("mismatch between rate limit and state headers")
 	}
 
-	newLimits := make([]RateLimit, 0, len(limitParts))
+	newPolicies := make([]Policy, 0, len(limitParts))
 
 	for i, limitPart := range limitParts {
 		// Parse limit: "60:60:10" -> max_requests:window_seconds:reset_seconds
@@ -79,83 +94,79 @@ func (rl *RateLimiter) UpdateFromResponse(resp *http.Response) error {
 
 		maxRequests, _ := strconv.Atoi(limitValues[0])
 		windowSeconds, _ := strconv.Atoi(limitValues[1])
-		resetSeconds, _ := strconv.Atoi(limitValues[2])
-
 		currentUsage, _ := strconv.Atoi(stateValues[0])
-		// stateValues[1] should match windowSeconds
-		secondsUntilReset, _ := strconv.Atoi(stateValues[2])
 
-		// Calculate when this window started
-		// If secondsUntilReset is 0, the window just reset, so start from now
-		var windowStart time.Time
-		if secondsUntilReset == 0 {
-			windowStart = now
-		} else {
-			windowStart = now.Add(-time.Duration(windowSeconds-secondsUntilReset) * time.Second)
+		policy := Policy{
+			MaxHits: maxRequests,
+			Period:  time.Duration(windowSeconds) * time.Second,
 		}
+		newPolicies = append(newPolicies, policy)
 
-		newLimits = append(newLimits, RateLimit{
-			maxRequests:   maxRequests,
-			windowSeconds: windowSeconds,
-			resetSeconds:  resetSeconds,
-			currentUsage:  currentUsage,
-			windowStart:   windowStart,
-		})
+		// Add missing timestamps to match server's reported usage
+		trackedHits := policy.CurrentHits(rl.requestTimes)
+		missingHits := currentUsage - trackedHits
+		for j := 0; j < missingHits; j++ {
+			rl.requestTimes = append(rl.requestTimes, now)
+		}
 	}
 
-	if len(newLimits) > 0 {
-		rl.rateLimits = newLimits
+	if len(newPolicies) > 0 {
+		rl.policies = newPolicies
 		rl.lastUpdated = now
 	}
 
+	// Clean old timestamps (older than 10 minutes)
+	rl.cleanExpiredRequests(now)
+
 	return nil
+} // cleanExpiredRequests removes requests that are older than 10 minutes
+func (rl *RateLimiter) cleanExpiredRequests(now time.Time) {
+	cutoff := now.Add(-600 * time.Second) // 10 minutes
+
+	validRequests := make([]time.Time, 0, len(rl.requestTimes))
+	for _, reqTime := range rl.requestTimes {
+		if reqTime.After(cutoff) {
+			validRequests = append(validRequests, reqTime)
+		}
+	}
+
+	rl.requestTimes = validRequests
+}
+
+// canMakeRequest checks if a request can be made without violating any rate limit
+func (rl *RateLimiter) canMakeRequest() bool {
+	for _, policy := range rl.policies {
+		if policy.IsViolated(rl.requestTimes) {
+			return false
+		}
+	}
+	return true
 }
 
 // Wait blocks until it's safe to make a request according to current rate limits
 func (rl *RateLimiter) Wait() {
-	rl.mutex.Lock()
-	defer rl.mutex.Unlock()
-
-	now := time.Now()
-	var maxWait time.Duration
-
-	for _, limit := range rl.rateLimits {
-		// Calculate how much time is left in this window
-		windowEnd := limit.windowStart.Add(time.Duration(limit.windowSeconds) * time.Second)
-		timeLeftInWindow := windowEnd.Sub(now)
-
-		// If the window has expired, reset the usage
-		if timeLeftInWindow <= 0 {
-			limit.currentUsage = 0
-			limit.windowStart = now
-			continue
+	for {
+		rl.mutex.Lock()
+		canMake := rl.canMakeRequest()
+		if canMake {
+			// Record this request
+			now := time.Now()
+			rl.requestTimes = append(rl.requestTimes, now)
+			rl.cleanExpiredRequests(now)
+			rl.mutex.Unlock()
+			return
 		}
+		rl.mutex.Unlock()
 
-		// If we're at or over the limit, we need to wait
-		if limit.currentUsage >= limit.maxRequests {
-			if timeLeftInWindow > maxWait {
-				maxWait = timeLeftInWindow
-			}
-		}
+		// Wait a short time before checking again
+		time.Sleep(100 * time.Millisecond)
 	}
+}
 
-	// If we need to wait, do so
-	if maxWait > 0 {
-		time.Sleep(maxWait)
-
-		// After waiting, reset any expired windows
-		now = time.Now()
-		for i := range rl.rateLimits {
-			windowEnd := rl.rateLimits[i].windowStart.Add(time.Duration(rl.rateLimits[i].windowSeconds) * time.Second)
-			if now.After(windowEnd) {
-				rl.rateLimits[i].currentUsage = 0
-				rl.rateLimits[i].windowStart = now
-			}
-		}
+func (rl *RateLimiter) GetState() string {
+	states := make([]string, len(rl.policies))
+	for i, policy := range rl.policies {
+		states[i] = fmt.Sprintf("%d:%d:%d", policy.CurrentHits(rl.requestTimes), policy.MaxHits, int(math.Round(policy.Period.Seconds())))
 	}
-
-	// Increment usage for all limits (since we're about to make a request)
-	for i := range rl.rateLimits {
-		rl.rateLimits[i].currentUsage++
-	}
+	return strings.Join(states, ", ")
 }
