@@ -47,13 +47,12 @@ jobs:
           cp bpl-tools-darwin-arm64 temp-darwin-arm64/bpl-tools/bpl-tools
 
           # Create zip archives with folder structure
-          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip temp-linux/
-          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip temp-windows/
-          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip temp-darwin-amd64/
-          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip temp-darwin-arm64/
+          cd temp-linux && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools/ && cd ..
+          cd temp-windows && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools/ && cd ..
+          cd temp-darwin-amd64 && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools/ && cd ..
+          cd temp-darwin-arm64 && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools/ && cd ..
 
           # Clean up temporary directories
-          rm -rf temp-linux temp-windows temp-darwin-amd64 temp-darwin-arm64
 
       - name: Generate release notes
         id: release_notes
