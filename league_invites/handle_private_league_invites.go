@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
 
 // CredentialError represents an error related to invalid credentials
 type CredentialError struct {
-	Type    string // "poe_session", "bpl_token", "private_league_id"
+	Type    string // "poe_session", "bpl_token"
 	Message string
 	Code    int
 }
@@ -54,16 +55,66 @@ type AcceptRequest struct {
 	Value int    `json:"value"`
 }
 
-func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", fmt.Sprintf("https://www.pathofexile.com/api/private-league-member/%s", privateLeagueId), nil)
+type Client struct {
+	Client          *http.Client
+	PoeSessID       string
+	BPLToken        string
+	PrivateLeagueId string
+	BPLUrl          string
+}
+
+type Event struct {
+	Name string `json:"name"`
+}
+
+func NewClient(poeSessID, bplToken string) (*Client, error) {
+	client := &Client{
+		Client:    &http.Client{},
+		PoeSessID: poeSessID,
+		BPLToken:  bplToken,
+		BPLUrl:    "https://v2202503259898322516.goodsrv.de/api",
+	}
+	err := client.setPrivateLeagueId()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+func (c *Client) setPrivateLeagueId() error {
+	resp, err := c.Client.Get(c.BPLUrl + "/events/current")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return err
+	}
+
+	var leagueInfo Event
+	if err := json.NewDecoder(resp.Body).Decode(&leagueInfo); err != nil {
+		return err
+	}
+	regex := regexp.MustCompile(`\s*\(PL(\d+)\)`)
+	matches := regex.FindStringSubmatch(leagueInfo.Name)
+	if len(matches) != 2 {
+		return fmt.Errorf("unexpected league name format: %s", leagueInfo.Name)
+	}
+	c.PrivateLeagueId = matches[1]
+	fmt.Printf("Checking requests for league %s\n", leagueInfo.Name)
+	return nil
+}
+
+func (c *Client) getLeagueJoinRequests() ([]Member, error) {
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://www.pathofexile.com/api/private-league-member/%s", c.PrivateLeagueId), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("accept", "application/json")
 	req.Header.Set("user-agent", "Liberatorist@gmail.com")
-	req.AddCookie(&http.Cookie{Name: "POESESSID", Value: poeSessID})
+	req.AddCookie(&http.Cookie{Name: "POESESSID", Value: c.PoeSessID})
 
 	q := req.URL.Query()
 	q.Add("sort", "roleDesc")
@@ -73,7 +124,7 @@ func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, 
 	q.Add("_", fmt.Sprintf("%d", time.Now().Unix()))
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +132,6 @@ func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, 
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return nil, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID invalid)", resp.StatusCode), resp.StatusCode)
-	}
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
-		return nil, NewCredentialError("private_league_id", fmt.Sprintf("HttpStatusCode: %d (Private League ID invalid)", resp.StatusCode), resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HttpStatusCode: %d from PoE API", resp.StatusCode)
@@ -110,16 +158,15 @@ func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, 
 	return requestedMembers, nil
 }
 
-func getSortedUsers(baseURL, bplToken string) (map[string]bool, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", baseURL+"/events/current/signups", nil)
+func (c *Client) getSortedUsers() (map[string]bool, error) {
+	req, err := http.NewRequest("GET", c.BPLUrl+"/events/current/signups", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set("Authorization", "Bearer "+bplToken)
+	req.Header.Set("Authorization", "Bearer "+c.BPLToken)
 
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -153,9 +200,7 @@ func getSortedUsers(baseURL, bplToken string) (map[string]bool, error) {
 	return sortedUsers, nil
 }
 
-func acceptPrivateLeagueInvites(members []Member, poeSessID string, privateLeagueId string) error {
-	client := &http.Client{}
-
+func (c *Client) acceptPrivateLeagueInvites(members []Member) error {
 	var acceptRequests []AcceptRequest
 	for _, member := range members {
 		acceptRequests = append(acceptRequests, AcceptRequest{
@@ -169,7 +214,7 @@ func acceptPrivateLeagueInvites(members []Member, poeSessID string, privateLeagu
 		return err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("https://www.pathofexile.com/api/private-league-member/%s", privateLeagueId), bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", fmt.Sprintf("https://www.pathofexile.com/api/private-league-member/%s", c.PrivateLeagueId), bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
@@ -177,9 +222,9 @@ func acceptPrivateLeagueInvites(members []Member, poeSessID string, privateLeagu
 	req.Header.Set("accept", "application/json, text/javascript, */*; q=0.01")
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("user-agent", "Contact: Liberatorist@gmail.com")
-	req.AddCookie(&http.Cookie{Name: "POESESSID", Value: poeSessID})
+	req.AddCookie(&http.Cookie{Name: "POESESSID", Value: c.PoeSessID})
 
-	resp, err := client.Do(req)
+	resp, err := c.Client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -197,13 +242,13 @@ func acceptPrivateLeagueInvites(members []Member, poeSessID string, privateLeagu
 	return nil
 }
 
-func HandlePrivateLeagueInvites(baseURL string, bplToken string, poeSessID string, privateLeagueId string) error {
-	sortedUsers, err := getSortedUsers(baseURL, bplToken)
+func (c *Client) HandlePrivateLeagueInvites() error {
+	sortedUsers, err := c.getSortedUsers()
 	if err != nil {
 		return fmt.Errorf("failed to get sorted users: %w", err)
 	}
 
-	guildRequests, err := getLeagueJoinRequests(poeSessID, privateLeagueId)
+	guildRequests, err := c.getLeagueJoinRequests()
 	if err != nil {
 		return fmt.Errorf("failed to get guild join requests: %w", err)
 	}
@@ -228,7 +273,7 @@ func HandlePrivateLeagueInvites(baseURL string, bplToken string, poeSessID strin
 		return nil
 	}
 
-	err = acceptPrivateLeagueInvites(membersToAdd, poeSessID, privateLeagueId)
+	err = c.acceptPrivateLeagueInvites(membersToAdd)
 	if err != nil {
 		return err
 	}
@@ -237,10 +282,24 @@ func HandlePrivateLeagueInvites(baseURL string, bplToken string, poeSessID strin
 	return nil
 }
 
-func RunContinuous(baseURL, bplToken, poeSessID string, privateLeagueId string, interval time.Duration) {
+func HandlePrivateLeagueInvites(bplToken, poeSessID string) error {
+	client, err := NewClient(poeSessID, bplToken)
+	if err != nil {
+		fmt.Printf("Error creating client: %v\n", err)
+		return err
+	}
+	return client.HandlePrivateLeagueInvites()
+}
+
+func RunContinuous(bplToken, poeSessID string, interval time.Duration) {
+	client, err := NewClient(poeSessID, bplToken)
+	if err != nil {
+		fmt.Printf("Error creating client: %v\n", err)
+		return
+	}
 	for {
 		fmt.Printf("%s Checking for guild invites...\n", time.Now().Format("2006-01-02 15:04:05"))
-		if err := HandlePrivateLeagueInvites(baseURL, bplToken, poeSessID, privateLeagueId); err != nil {
+		if err := client.HandlePrivateLeagueInvites(); err != nil {
 			fmt.Printf("Error handling guild invites: %v\n", err)
 		}
 		time.Sleep(interval)

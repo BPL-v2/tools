@@ -17,7 +17,7 @@ var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
 
 // CredentialError represents an error related to invalid credentials
 type CredentialError struct {
-	Type    string // "poe_session", "bpl_token", "guild_id"
+	Type    string // "poe_session", "bpl_token"
 	Message string
 	Code    int
 }
@@ -61,13 +61,17 @@ type GuildStashChangeResponse struct {
 	Truncated bool `json:"truncated"`
 }
 
-func NewClient(sessionId, bplJwt, guildId string) *Client {
+func NewClient(sessionId, bplJwt string) (*Client, error) {
+	guildInfo, err := FetchGuildInfo(sessionId)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to fetch guild info: %w", err)
+	}
 	return &Client{
 		RateLimiter: NewRateLimiter(),
 		SessionId:   sessionId,
 		BplJwt:      bplJwt,
-		GuildId:     guildId,
-	}
+		GuildId:     guildInfo.ID,
+	}, nil
 }
 
 func (c *Client) getTimestamps() (*GuildStashLogTimestampResponse, error) {
@@ -153,9 +157,6 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 	if err != nil {
 		return 0, latestId, err
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return 0, latestId, NewCredentialError("guild_id", fmt.Sprintf("HttpStatusCode: %d (Guild not found - Guild ID invalid or no access rights)", resp.StatusCode), resp.StatusCode)
-	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		retry, err := strconv.Atoi(resp.Header.Get("retry-after"))
 		if err != nil {
@@ -222,10 +223,11 @@ func (c *Client) sendStashHistoryToBplBackend(body []byte) {
 	}
 }
 
-func RunStashMonitoring(sessionId, bplJwt, guildId string) error {
-	client := NewClient(sessionId, bplJwt, guildId)
-
-	fmt.Print("Fetching timestamps...")
+func RunStashMonitoring(sessionId, bplJwt string) error {
+	client, err := NewClient(sessionId, bplJwt)
+	if err != nil {
+		return fmt.Errorf("error creating client: %w", err)
+	}
 	timestamps, err := client.getTimestamps()
 	if err != nil {
 		return fmt.Errorf("error getting latest timestamp: %w", err)
@@ -253,9 +255,11 @@ func RunStashMonitoring(sessionId, bplJwt, guildId string) error {
 	return nil
 }
 
-func RunStashMonitoringContinuous(sessionId, bplJwt, guildId string, interval time.Duration) error {
-	client := NewClient(sessionId, bplJwt, guildId)
-
+func RunStashMonitoringContinuous(sessionId, bplJwt string, interval time.Duration) error {
+	client, err := NewClient(sessionId, bplJwt)
+	if err != nil {
+		return err
+	}
 	timestamps, err := client.getTimestamps()
 	if err != nil {
 		return err

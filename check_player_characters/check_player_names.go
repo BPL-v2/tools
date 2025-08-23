@@ -40,9 +40,10 @@ var baseClasses = []string{
 	"Witch",
 	"Duelist",
 }
+var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
 
-func getTeams(baseURL string) ([]Team, error) {
-	resp, err := http.Get(baseURL + "/events/current/teams")
+func getTeams() ([]Team, error) {
+	resp, err := http.Get(bplBaseUrl + "/events/current/teams")
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +62,8 @@ func getTeams(baseURL string) ([]Team, error) {
 	return teams, nil
 }
 
-func getLadder(baseURL string) ([]LadderEntry, error) {
-	resp, err := http.Get(baseURL + "/events/current/ladder")
+func getLadder() ([]LadderEntry, error) {
+	resp, err := http.Get(bplBaseUrl + "/events/current/ladder")
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +79,8 @@ func getLadder(baseURL string) ([]LadderEntry, error) {
 	return ladder, err
 }
 
-func getUsers(baseURL string) (map[int]int, error) {
-	resp, err := http.Get(baseURL + "/events/current/users")
+func getUsers() (map[int]int, error) {
+	resp, err := http.Get(bplBaseUrl + "/events/current/users")
 	if err != nil {
 		return nil, err
 	}
@@ -108,13 +109,13 @@ func getUsers(baseURL string) (map[int]int, error) {
 	return userMap, nil
 }
 
-func CharacterCheck(baseURL string) error {
-	userMap, err := getUsers(baseURL)
+func CharacterCheck() error {
+	userMap, err := getUsers()
 	if err != nil {
 		return fmt.Errorf("failed to get users: %w", err)
 	}
 
-	teams, err := getTeams(baseURL)
+	teams, err := getTeams()
 	if err != nil {
 		return fmt.Errorf("failed to get teams: %w", err)
 	}
@@ -123,7 +124,7 @@ func CharacterCheck(baseURL string) error {
 		teamMap[team.ID] = team
 	}
 
-	ladderEntries, err := getLadder(baseURL)
+	ladderEntries, err := getLadder()
 	if err != nil {
 		return fmt.Errorf("failed to get ladder: %w", err)
 	}
@@ -152,10 +153,10 @@ func CharacterCheck(baseURL string) error {
 	return nil
 }
 
-func RunContinuous(baseURL string, interval time.Duration) {
+func RunContinuous(interval time.Duration) {
 	for {
 		fmt.Printf("%s Checking for player name mismatches...\n", time.Now().Format("2006-01-02 15:04:05"))
-		if err := CharacterCheck(baseURL); err != nil {
+		if err := CharacterCheck(); err != nil {
 			fmt.Printf("Error checking player names: %v\n", err)
 		}
 		time.Sleep(interval)

@@ -20,19 +20,14 @@ var (
 	bplBaseUrl      string
 	bplToken        string
 	poeSessID       string
-	guildId         string
 	privateLeagueId string
 )
 
 func init() {
 	// Load environment variables from bpl-config.txt file
 	loadEnvFromFile("bpl-config.txt")
-
-	bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
 	bplToken = os.Getenv("BPL_TOKEN")
 	poeSessID = os.Getenv("POESESSID")
-	guildId = os.Getenv("GUILD_ID")
-	privateLeagueId = os.Getenv("PRIVATE_LEAGUE_ID")
 }
 
 // loadEnvFromFile loads environment variables from a file
@@ -101,35 +96,6 @@ func getEnvVarInstructions(envVarName string) string {
 4. Go to Application (Chromium) / Storage (Firefox)
 5. Go to Cookies for https://www.pathofexile.com/
 6. Find the POESESSID cookie and copy its value
-
-═══════════════════════════════════════════════════════════════`
-
-	case "GUILD_ID":
-		return `
-═══════════════════════════════════════════════════════════════
-                    How to get your Guild ID
-═══════════════════════════════════════════════════════════════
-
-1. Navigate to https://www.pathofexile.com/my-guild
-2. Click on "Stash History"
-3. Your Browser URL should look like: 
-   https://www.pathofexile.com/guild/profile/408208/stash-history
-4. The number between 'profile' and 'stash-history' is your guild ID
-   (e.g., 408208 in the example above)
-
-═══════════════════════════════════════════════════════════════`
-
-	case "PRIVATE_LEAGUE_ID":
-		return `
-═══════════════════════════════════════════════════════════════
-                How to get your Private League ID
-═══════════════════════════════════════════════════════════════
-
-1. Navigate to https://www.pathofexile.com/private-leagues
-2. Click "view" on your league
-3. It will be named "YourLeagueName (PL12345)"
-4. The number after "PL" is your league ID
-   (e.g., 12345 in the example above)
 
 ═══════════════════════════════════════════════════════════════`
 
@@ -244,12 +210,7 @@ func ensureEnvVars(envVars []EnvVar) error {
 				bplToken = newValue
 			case "POESESSID":
 				poeSessID = newValue
-			case "GUILD_ID":
-				guildId = newValue
-			case "PRIVATE_LEAGUE_ID":
-				privateLeagueId = newValue
 			}
-
 			// Update the bpl-config.txt file
 			if err := updateEnvFile(envVar.Name, newValue); err != nil {
 				log.Printf("Warning: Could not update bpl-config.txt file: %v", err)
@@ -301,10 +262,6 @@ func handleCredentialError(credType string) error {
 		envVar = EnvVar{Name: "POESESSID", Description: "Path of Exile session ID from browser", Required: true}
 	case "bpl_token":
 		envVar = EnvVar{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: true}
-	case "guild_id":
-		envVar = EnvVar{Name: "GUILD_ID", Description: "Guild ID to monitor stash for", Required: true}
-	case "private_league_id":
-		envVar = EnvVar{Name: "PRIVATE_LEAGUE_ID", Description: "Private league ID to process invites for", Required: true}
 	default:
 		return fmt.Errorf("unknown credential type: %s", credType)
 	}
@@ -344,12 +301,7 @@ func handleCredentialError(credType string) error {
 		bplToken = newValue
 	case "POESESSID":
 		poeSessID = newValue
-	case "GUILD_ID":
-		guildId = newValue
-	case "PRIVATE_LEAGUE_ID":
-		privateLeagueId = newValue
 	}
-
 	// Update the config file
 	if err := updateEnvFile(envVar.Name, newValue); err != nil {
 		log.Printf("Warning: Could not update bpl-config.txt file: %v", err)
@@ -367,10 +319,6 @@ func getCredentialDisplayName(credType string) string {
 		return "PoE Session ID"
 	case "bpl_token":
 		return "BPL Token"
-	case "guild_id":
-		return "Guild ID"
-	case "private_league_id":
-		return "Private League ID"
 	default:
 		return credType
 	}
@@ -442,30 +390,14 @@ func getMainMenuOptions() []MenuOption {
 }
 
 func runCheckPlayerNamesSingle() error {
-	envVars := []EnvVar{
-		{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: false},
-	}
-
-	if err := ensureEnvVars(envVars); err != nil {
-		return err
-	}
-
 	fmt.Println("Running player name check...")
-	return check_player_characters.CharacterCheck(bplBaseUrl)
+	return check_player_characters.CharacterCheck()
 }
 
 func runCheckPlayerNamesContinuous() error {
-	envVars := []EnvVar{
-		{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: false},
-	}
-
-	if err := ensureEnvVars(envVars); err != nil {
-		return err
-	}
-
 	fmt.Println("Starting continuous player name monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
-	check_player_characters.RunContinuous(bplBaseUrl, 5*time.Minute)
+	check_player_characters.RunContinuous(5 * time.Minute)
 	return nil
 }
 
@@ -473,7 +405,6 @@ func runPrivateLeagueInvitesSingle() error {
 	envVars := []EnvVar{
 		{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: true},
 		{Name: "POESESSID", Description: "Path of Exile session ID from browser", Required: true},
-		{Name: "PRIVATE_LEAGUE_ID", Description: "Private league ID to process invites for", Required: true},
 	}
 
 	if err := ensureEnvVars(envVars); err != nil {
@@ -482,7 +413,7 @@ func runPrivateLeagueInvitesSingle() error {
 
 	fmt.Println("Processing private league invites...")
 	return runWithCredentialRetry(func() error {
-		return league_invites.HandlePrivateLeagueInvites(bplBaseUrl, bplToken, poeSessID, privateLeagueId)
+		return league_invites.HandlePrivateLeagueInvites(bplToken, poeSessID)
 	})
 }
 
@@ -490,7 +421,6 @@ func runPrivateLeagueInvitesContinuous() error {
 	envVars := []EnvVar{
 		{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: true},
 		{Name: "POESESSID", Description: "Path of Exile session ID from browser", Required: true},
-		{Name: "PRIVATE_LEAGUE_ID", Description: "Private league ID to process invites for", Required: true},
 	}
 
 	if err := ensureEnvVars(envVars); err != nil {
@@ -500,7 +430,7 @@ func runPrivateLeagueInvitesContinuous() error {
 	fmt.Println("Starting continuous private league invite monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
 	return runWithCredentialRetry(func() error {
-		league_invites.RunContinuous(bplBaseUrl, bplToken, poeSessID, privateLeagueId, 5*time.Minute)
+		league_invites.RunContinuous(bplToken, poeSessID, 5*time.Minute)
 		return nil
 	})
 }
@@ -509,7 +439,6 @@ func runGuildStashSingle() error {
 	envVars := []EnvVar{
 		{Name: "POESESSID", Description: "Path of Exile session ID from browser", Required: true},
 		{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: true},
-		{Name: "GUILD_ID", Description: "Guild ID to monitor stash for", Required: true},
 	}
 
 	if err := ensureEnvVars(envVars); err != nil {
@@ -518,7 +447,7 @@ func runGuildStashSingle() error {
 
 	fmt.Println("Running guild stash monitoring...")
 	return runWithCredentialRetry(func() error {
-		return guild_stash_logs.RunStashMonitoring(poeSessID, bplToken, guildId)
+		return guild_stash_logs.RunStashMonitoring(poeSessID, bplToken)
 	})
 }
 
@@ -526,7 +455,6 @@ func runGuildStashContinuous() error {
 	envVars := []EnvVar{
 		{Name: "POESESSID", Description: "Path of Exile session ID from browser", Required: true},
 		{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: true},
-		{Name: "GUILD_ID", Description: "Guild ID to monitor stash for", Required: true},
 	}
 
 	if err := ensureEnvVars(envVars); err != nil {
@@ -536,7 +464,7 @@ func runGuildStashContinuous() error {
 	fmt.Println("Starting continuous guild stash monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
 	return runWithCredentialRetry(func() error {
-		return guild_stash_logs.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
+		return guild_stash_logs.RunStashMonitoringContinuous(poeSessID, bplToken, 5*time.Minute)
 	})
 }
 

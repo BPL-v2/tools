@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
-	github.com/joho/godotenv v1.5.1
+	golang.org/x/net v0.32.0
 )
 
 require (
@@ -14,5 +14,5 @@ require (
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/term v0.34.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )

@@ -82,8 +82,8 @@ The application uses environment variables stored in a `bpl-config.txt` file for
 Required variables by feature:
 
 - **Check Player Characters**: No environment variables required
-- **Handle Private League Invites**: `BPL_TOKEN`, `POESESSID`, `PRIVATE_LEAGUE_ID`
-- **Guild Stash Monitor**: `BPL_TOKEN`, `POESESSID`, `GUILD_ID`
+- **Handle Private League Invites**: `BPL_TOKEN`, `POESESSID`
+- **Guild Stash Monitor**: `BPL_TOKEN`, `POESESSID`
 
 ## Development
 
