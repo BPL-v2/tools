@@ -21,13 +21,6 @@ We need the following input Parameters:
 - Go to Application (Chromium) / Storage (Firefox)
 - Go to Cookies for https://www.pathofexile.com/
 - Select the value for POESESSID
-<div>
-<p> Firefox: </p>
-<img src="./example_images/SessionIdFirefox.png" alt="Finding POESESSID cookie value Firefox" width="600">
-<p> Chrome: </p>
-
-<img src="./example_images/SessionIdChrome.png" alt="Finding POESESSID cookie value Chrome" width="600">
-</div>
 
 ## BPL JWT
 
@@ -37,13 +30,6 @@ We need the following input Parameters:
 - Go to Application (Chromium) / Storage (Firefox)
 - Go to Local storage for https://bpl-poe.com/
 - Select value for auth
-<div>
-<p> Firefox: </p>
-<img src="./example_images/JWTFirefox.png" alt="Finding BPL JWT Firefox" width="600">
-<p> Chrome: </p>
-
-<img src="./example_images/JWTChrome.png" alt="Finding BPL JWT Chrome" width="600">
-</div>
 
 ## Guild ID
 
@@ -95,7 +81,7 @@ The application uses environment variables stored in a `bpl-config.txt` file for
 
 Required variables by feature:
 
-- **Check Player Names**: No environment variables required
+- **Check Player Characters**: No environment variables required
 - **Handle Private League Invites**: `BPL_TOKEN`, `POESESSID`, `PRIVATE_LEAGUE_ID`
 - **Guild Stash Monitor**: `BPL_TOKEN`, `POESESSID`, `GUILD_ID`
 

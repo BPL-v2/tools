@@ -1,4 +1,4 @@
-package handleprivateleagueinvites
+package league_invites
 
 import (
 	"bytes"

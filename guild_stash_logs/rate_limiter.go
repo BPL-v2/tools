@@ -1,4 +1,4 @@
-package guildstashtool
+package guild_stash_logs
 
 import (
 	"fmt"

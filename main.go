@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"tools/checkplayernames"
-	"tools/guildstashtool"
-	"tools/handleprivateleagueinvites"
+	"tools/check_player_characters"
+	"tools/guild_stash_logs"
+	"tools/league_invites"
 
 	"github.com/AlecAivazis/survey/v2"
 )
@@ -249,12 +249,12 @@ func ensureEnvVars(envVars []EnvVar) error {
 // isCredentialError checks if an error is a credential-related error
 func isCredentialError(err error) (credType string, isCredError bool) {
 	// Unwrap the error to check for wrapped credential errors
-	var guildCredErr *guildstashtool.CredentialError
+	var guildCredErr *guild_stash_logs.CredentialError
 	if errors.As(err, &guildCredErr) {
 		return guildCredErr.Type, true
 	}
 
-	var privateCredErr *handleprivateleagueinvites.CredentialError
+	var privateCredErr *league_invites.CredentialError
 	if errors.As(err, &privateCredErr) {
 		return privateCredErr.Type, true
 	}
@@ -400,9 +400,9 @@ type MenuOption struct {
 func getMainMenuOptions() []MenuOption {
 	return []MenuOption{
 		{
-			Name:        "Check Player Names",
-			Description: "Check if player names contain their team abbreviations",
-			Action:      showCheckPlayerNamesMenu,
+			Name:        "Check Player Characters",
+			Description: "Check if characters are named correctly and have allowed ascendancies",
+			Action:      showCheckCharactersMenu,
 		},
 		{
 			Name:        "Handle Private League Invites",
@@ -410,8 +410,8 @@ func getMainMenuOptions() []MenuOption {
 			Action:      showPrivateLeagueInvitesMenu,
 		},
 		{
-			Name:        "Guild Stash Monitor",
-			Description: "Monitor guild stash changes and sync to BPL backend",
+			Name:        "Guild Stash Logs",
+			Description: "Fetch guild stash changes and sync to BPL backend",
 			Action:      showGuildStashMenu,
 		},
 		{
@@ -436,7 +436,7 @@ func runCheckPlayerNamesSingle() error {
 	}
 
 	fmt.Println("Running player name check...")
-	return checkplayernames.TeamCheck(bplBaseUrl)
+	return check_player_characters.CharacterCheck(bplBaseUrl)
 }
 
 func runCheckPlayerNamesContinuous() error {
@@ -450,7 +450,7 @@ func runCheckPlayerNamesContinuous() error {
 
 	fmt.Println("Starting continuous player name monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
-	checkplayernames.RunContinuous(bplBaseUrl, 5*time.Minute)
+	check_player_characters.RunContinuous(bplBaseUrl, 5*time.Minute)
 	return nil
 }
 
@@ -467,7 +467,7 @@ func runPrivateLeagueInvitesSingle() error {
 
 	fmt.Println("Processing private league invites...")
 	return runWithCredentialRetry(func() error {
-		return handleprivateleagueinvites.HandlePrivateLeagueInvites(bplBaseUrl, bplToken, poeSessID, privateLeagueId)
+		return league_invites.HandlePrivateLeagueInvites(bplBaseUrl, bplToken, poeSessID, privateLeagueId)
 	})
 }
 
@@ -485,7 +485,7 @@ func runPrivateLeagueInvitesContinuous() error {
 	fmt.Println("Starting continuous private league invite monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
 	return runWithCredentialRetry(func() error {
-		handleprivateleagueinvites.RunContinuous(bplBaseUrl, bplToken, poeSessID, privateLeagueId, 5*time.Minute)
+		league_invites.RunContinuous(bplBaseUrl, bplToken, poeSessID, privateLeagueId, 5*time.Minute)
 		return nil
 	})
 }
@@ -503,7 +503,7 @@ func runGuildStashSingle() error {
 
 	fmt.Println("Running guild stash monitoring...")
 	return runWithCredentialRetry(func() error {
-		return guildstashtool.RunStashMonitoring(poeSessID, bplToken, guildId)
+		return guild_stash_logs.RunStashMonitoring(poeSessID, bplToken, guildId)
 	})
 }
 
@@ -521,7 +521,7 @@ func runGuildStashContinuous() error {
 	fmt.Println("Starting continuous guild stash monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
 	return runWithCredentialRetry(func() error {
-		return guildstashtool.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
+		return guild_stash_logs.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
 	})
 }
 
@@ -578,7 +578,7 @@ func showRunModeMenu(toolName string, singleAction, continuousAction func() erro
 	return fmt.Errorf("unknown option selected")
 }
 
-func showCheckPlayerNamesMenu() error {
+func showCheckCharactersMenu() error {
 	return showRunModeMenu("Check Player Names", runCheckPlayerNamesSingle, runCheckPlayerNamesContinuous)
 }
 

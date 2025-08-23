@@ -1,18 +1,24 @@
-package checkplayernames
+package check_player_characters
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
 
+type Character struct {
+	Ascendancy string `json:"ascendancy"`
+}
+
 type LadderEntry struct {
-	UserID        int    `json:"user_id"`
-	CharacterName string `json:"character_name"`
-	Level         int    `json:"level"`
+	UserID        int       `json:"user_id"`
+	CharacterName string    `json:"character_name"`
+	Level         int       `json:"level"`
+	Character     Character `json:"character"`
 }
 
 type User struct {
@@ -23,6 +29,16 @@ type Team struct {
 	ID             int      `json:"id"`
 	Name           string   `json:"name"`
 	AllowedClasses []string `json:"allowed_classes"`
+}
+
+var baseClasses = []string{
+	"Scion",
+	"Marauder",
+	"Ranger",
+	"Shadow",
+	"Templar",
+	"Witch",
+	"Duelist",
 }
 
 func getTeams(baseURL string) ([]Team, error) {
@@ -92,7 +108,7 @@ func getUsers(baseURL string) (map[int]int, error) {
 	return userMap, nil
 }
 
-func TeamCheck(baseURL string) error {
+func CharacterCheck(baseURL string) error {
 	userMap, err := getUsers(baseURL)
 	if err != nil {
 		return fmt.Errorf("failed to get users: %w", err)
@@ -116,10 +132,15 @@ func TeamCheck(baseURL string) error {
 	for _, entry := range ladderEntries {
 		if teamID, exists := userMap[entry.UserID]; exists {
 			if team, teamExists := teamMap[teamID]; teamExists {
+
 				teamShort := strings.ToLower(team.Name[:3])
 				if !strings.Contains(strings.ToLower(entry.CharacterName), teamShort) && entry.Level >= 10 {
 					foundMismatch = true
 					fmt.Printf("Mismatch: Lvl %d %s does not contain %s abbrevation\n", entry.Level, entry.CharacterName, team.Name)
+				}
+				if !slices.Contains(baseClasses, entry.Character.Ascendancy) &&
+					!slices.Contains(team.AllowedClasses, entry.Character.Ascendancy) {
+					fmt.Printf("Mismatch: %s has an invalid ascendancy: %s\n", entry.CharacterName, entry.Character.Ascendancy)
 				}
 			}
 		}
@@ -134,7 +155,7 @@ func TeamCheck(baseURL string) error {
 func RunContinuous(baseURL string, interval time.Duration) {
 	for {
 		fmt.Printf("%s Checking for player name mismatches...\n", time.Now().Format("2006-01-02 15:04:05"))
-		if err := TeamCheck(baseURL); err != nil {
+		if err := CharacterCheck(baseURL); err != nil {
 			fmt.Printf("Error checking player names: %v\n", err)
 		}
 		time.Sleep(interval)
