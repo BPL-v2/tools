@@ -26,11 +26,38 @@ var (
 
 func init() {
 	// Load environment variables from bpl-config.txt file
+	loadEnvFromFile("bpl-config.txt")
+
 	bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
 	bplToken = os.Getenv("BPL_TOKEN")
 	poeSessID = os.Getenv("POESESSID")
 	guildId = os.Getenv("GUILD_ID")
 	privateLeagueId = os.Getenv("PRIVATE_LEAGUE_ID")
+}
+
+// loadEnvFromFile loads environment variables from a file
+func loadEnvFromFile(filename string) {
+	file, err := os.Open(filename)
+	if err != nil {
+		// File doesn't exist yet, which is fine
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue // Skip empty lines and comments
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			os.Setenv(key, value)
+		}
+	}
 }
 
 // EnvVar represents an environment variable with its description
@@ -109,18 +136,6 @@ func getEnvVarInstructions(envVarName string) string {
 	default:
 		return ""
 	}
-}
-
-// promptForEnvVar prompts the user to enter a value for an environment variable
-func promptForEnvVar(envVar EnvVar) (string, error) {
-	// Show instructions for how to get this environment variable
-	instructions := getEnvVarInstructions(envVar.Name)
-	if instructions != "" {
-		fmt.Println(instructions)
-		fmt.Println()
-	}
-
-	return promptForEnvVarWithoutInstructions(envVar)
 }
 
 // promptForEnvVarWithoutInstructions prompts the user to enter a value without showing instructions
