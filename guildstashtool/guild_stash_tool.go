@@ -15,6 +15,25 @@ var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
 
 // var bplBaseUrl = "http://localhost:8000/api"
 
+// CredentialError represents an error related to invalid credentials
+type CredentialError struct {
+	Type    string // "poe_session", "bpl_token", "guild_id"
+	Message string
+	Code    int
+}
+
+func (e *CredentialError) Error() string {
+	return e.Message
+}
+
+func NewCredentialError(credType, message string, code int) *CredentialError {
+	return &CredentialError{
+		Type:    credType,
+		Message: message,
+		Code:    code,
+	}
+}
+
 type Client struct {
 	RateLimiter    *RateLimiter
 	SessionId      string
@@ -63,6 +82,14 @@ func (c *Client) getTimestamps() (*GuildStashLogTimestampResponse, error) {
 		return nil, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden {
+		return nil, NewCredentialError("bpl_token", fmt.Sprintf("HttpStatusCode: %d (BPL Token invalid or expired)", res.StatusCode), res.StatusCode)
+	}
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HttpStatusCode: %d from BPL backend", res.StatusCode)
+	}
+
 	body, _ := io.ReadAll(res.Body)
 	var timestamps GuildStashLogTimestampResponse
 	if err := json.Unmarshal(body, &timestamps); err != nil {
@@ -127,7 +154,7 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 		return 0, latestId, err
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (Guild not found - Guild ID or PoE Session ID invalid)", resp.StatusCode)
+		return 0, latestId, NewCredentialError("guild_id", fmt.Sprintf("HttpStatusCode: %d (Guild not found - Guild ID invalid or no access rights)", resp.StatusCode), resp.StatusCode)
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		retry, err := strconv.Atoi(resp.Header.Get("retry-after"))
@@ -137,8 +164,11 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 		duration := time.Duration(retry) * time.Second
 		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (Too many requests - Wait %v before trying again)", resp.StatusCode, duration)
 	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return 0, latestId, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID most likely invalid)", resp.StatusCode), resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
-		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (PoE Session ID most likely invalid)", resp.StatusCode)
+		return 0, latestId, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID most likely invalid)", resp.StatusCode), resp.StatusCode)
 	}
 
 	if updateErr := c.RateLimiter.UpdateFromResponse(resp); updateErr != nil {

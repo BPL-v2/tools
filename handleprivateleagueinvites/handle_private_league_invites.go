@@ -10,6 +10,25 @@ import (
 	"time"
 )
 
+// CredentialError represents an error related to invalid credentials
+type CredentialError struct {
+	Type    string // "poe_session", "bpl_token", "private_league_id"
+	Message string
+	Code    int
+}
+
+func (e *CredentialError) Error() string {
+	return e.Message
+}
+
+func NewCredentialError(credType, message string, code int) *CredentialError {
+	return &CredentialError{
+		Type:    credType,
+		Message: message,
+		Code:    code,
+	}
+}
+
 type Member struct {
 	ID           int    `json:"id"`
 	MemberName   string `json:"memberName"`
@@ -60,6 +79,16 @@ func getLeagueJoinRequests(poeSessID string, privateLeagueId string) ([]Member, 
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID invalid)", resp.StatusCode), resp.StatusCode)
+	}
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusBadRequest {
+		return nil, NewCredentialError("private_league_id", fmt.Sprintf("HttpStatusCode: %d (Private League ID invalid)", resp.StatusCode), resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HttpStatusCode: %d from PoE API", resp.StatusCode)
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -95,6 +124,13 @@ func getSortedUsers(baseURL, bplToken string) (map[string]bool, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, NewCredentialError("bpl_token", fmt.Sprintf("HttpStatusCode: %d (BPL Token invalid or expired)", resp.StatusCode), resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HttpStatusCode: %d from BPL API", resp.StatusCode)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -149,6 +185,10 @@ func acceptPrivateLeagueInvites(members []Member, poeSessID string, privateLeagu
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		body, _ := io.ReadAll(resp.Body)
+		return NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID invalid) - Response: %s", resp.StatusCode, string(body)), resp.StatusCode)
+	}
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to accept invites. Status code: %d, Response: %s", resp.StatusCode, string(body))

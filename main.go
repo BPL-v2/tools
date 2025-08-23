@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -25,9 +26,9 @@ var (
 )
 
 func init() {
-	// Load environment variables from .env file
-	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: .env file not found or could not be loaded: %v", err)
+	// Load environment variables from bpl-config.txt file
+	if err := godotenv.Load("bpl-config.txt"); err != nil {
+		log.Printf("Warning: bpl-config.txt file not found or could not be loaded: %v", err)
 	}
 
 	bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
@@ -146,9 +147,9 @@ func promptForEnvVarWithoutInstructions(envVar EnvVar) (string, error) {
 	return value, err
 }
 
-// updateEnvFile updates or creates the .env file with the new environment variable
+// updateEnvFile updates or creates the bpl-config.txt file with the new environment variable
 func updateEnvFile(key, value string) error {
-	envFile := ".env"
+	envFile := "bpl-config.txt"
 
 	// Read existing content
 	var lines []string
@@ -239,15 +240,163 @@ func ensureEnvVars(envVars []EnvVar) error {
 				privateLeagueId = newValue
 			}
 
-			// Update the .env file
+			// Update the bpl-config.txt file
 			if err := updateEnvFile(envVar.Name, newValue); err != nil {
-				log.Printf("Warning: Could not update .env file: %v", err)
+				log.Printf("Warning: Could not update bpl-config.txt file: %v", err)
 			} else {
-				fmt.Printf("✓ %s saved to .env file\n", envVar.Name)
+				fmt.Printf("✓ %s saved to bpl-config.txt file\n", envVar.Name)
 			}
 		}
 	}
 	return nil
+}
+
+// isCredentialError checks if an error is a credential-related error
+func isCredentialError(err error) (credType string, isCredError bool) {
+	// Unwrap the error to check for wrapped credential errors
+	var guildCredErr *guildstashtool.CredentialError
+	if errors.As(err, &guildCredErr) {
+		return guildCredErr.Type, true
+	}
+
+	var privateCredErr *handleprivateleagueinvites.CredentialError
+	if errors.As(err, &privateCredErr) {
+		return privateCredErr.Type, true
+	}
+
+	return "", false
+} // handleCredentialError prompts user to re-enter credentials when they're detected as faulty
+func handleCredentialError(credType string) error {
+	fmt.Printf("\n🚨 Credential Error Detected!\n")
+	fmt.Printf("The %s appears to be invalid or expired.\n\n", getCredentialDisplayName(credType))
+
+	var retry bool
+	retryPrompt := &survey.Confirm{
+		Message: "Would you like to enter a new value?",
+		Default: true,
+	}
+
+	if err := survey.AskOne(retryPrompt, &retry); err != nil {
+		return err
+	}
+
+	if !retry {
+		return fmt.Errorf("user chose not to update credentials")
+	}
+
+	// Create EnvVar for the specific credential type
+	var envVar EnvVar
+	switch credType {
+	case "poe_session":
+		envVar = EnvVar{Name: "POESESSID", Description: "Path of Exile session ID from browser", Required: true}
+	case "bpl_token":
+		envVar = EnvVar{Name: "BPL_TOKEN", Description: "BPL API token for authentication", Required: true}
+	case "guild_id":
+		envVar = EnvVar{Name: "GUILD_ID", Description: "Guild ID to monitor stash for", Required: true}
+	case "private_league_id":
+		envVar = EnvVar{Name: "PRIVATE_LEAGUE_ID", Description: "Private league ID to process invites for", Required: true}
+	default:
+		return fmt.Errorf("unknown credential type: %s", credType)
+	}
+
+	// Ask if user wants to see instructions
+	var showInstructions bool
+	instructionsPrompt := &survey.Confirm{
+		Message: fmt.Sprintf("Do you want to see instructions on how to get %s?", envVar.Name),
+		Default: true,
+	}
+
+	if err := survey.AskOne(instructionsPrompt, &showInstructions); err != nil {
+		return err
+	}
+
+	if showInstructions {
+		instructions := getEnvVarInstructions(envVar.Name)
+		if instructions != "" {
+			fmt.Println(instructions)
+			fmt.Println("\nPress Enter to continue...")
+			fmt.Scanln()
+			fmt.Println()
+		}
+	}
+
+	newValue, err := promptForEnvVarWithoutInstructions(envVar)
+	if err != nil {
+		return err
+	}
+
+	// Set the environment variable for this session
+	os.Setenv(envVar.Name, newValue)
+
+	// Update global variables
+	switch envVar.Name {
+	case "BPL_TOKEN":
+		bplToken = newValue
+	case "POESESSID":
+		poeSessID = newValue
+	case "GUILD_ID":
+		guildId = newValue
+	case "PRIVATE_LEAGUE_ID":
+		privateLeagueId = newValue
+	}
+
+	// Update the config file
+	if err := updateEnvFile(envVar.Name, newValue); err != nil {
+		log.Printf("Warning: Could not update bpl-config.txt file: %v", err)
+	} else {
+		fmt.Printf("✓ %s updated and saved to bpl-config.txt file\n\n", envVar.Name)
+	}
+
+	return nil
+}
+
+// getCredentialDisplayName returns a user-friendly name for credential types
+func getCredentialDisplayName(credType string) string {
+	switch credType {
+	case "poe_session":
+		return "PoE Session ID"
+	case "bpl_token":
+		return "BPL Token"
+	case "guild_id":
+		return "Guild ID"
+	case "private_league_id":
+		return "Private League ID"
+	default:
+		return credType
+	}
+}
+
+// runWithCredentialRetry runs a function and handles credential errors with retry logic
+func runWithCredentialRetry(fn func() error) error {
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		fmt.Printf("DEBUG: Error occurred: %v\n", err)
+		credType, isCredError := isCredentialError(err)
+		fmt.Printf("DEBUG: Credential error detected: %v, Type: %s\n", isCredError, credType)
+
+		if !isCredError {
+			return err // Not a credential error, return original error
+		}
+
+		fmt.Printf("Attempt %d/%d failed: %v\n", i+1, maxRetries, err)
+
+		if i == maxRetries-1 {
+			return fmt.Errorf("maximum retries reached. Last error: %w", err)
+		}
+
+		if err := handleCredentialError(credType); err != nil {
+			return fmt.Errorf("failed to update credentials: %w", err)
+		}
+
+		fmt.Println("Retrying with updated credentials...")
+	}
+
+	return fmt.Errorf("unexpected error in retry logic")
 }
 
 type MenuOption struct {
@@ -325,7 +474,9 @@ func runPrivateLeagueInvitesSingle() error {
 	}
 
 	fmt.Println("Processing private league invites...")
-	return handleprivateleagueinvites.HandlePrivateLeagueInvites(bplBaseUrl, bplToken, poeSessID, privateLeagueId)
+	return runWithCredentialRetry(func() error {
+		return handleprivateleagueinvites.HandlePrivateLeagueInvites(bplBaseUrl, bplToken, poeSessID, privateLeagueId)
+	})
 }
 
 func runPrivateLeagueInvitesContinuous() error {
@@ -341,8 +492,10 @@ func runPrivateLeagueInvitesContinuous() error {
 
 	fmt.Println("Starting continuous private league invite monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
-	handleprivateleagueinvites.RunContinuous(bplBaseUrl, bplToken, poeSessID, privateLeagueId, 5*time.Minute)
-	return nil
+	return runWithCredentialRetry(func() error {
+		handleprivateleagueinvites.RunContinuous(bplBaseUrl, bplToken, poeSessID, privateLeagueId, 5*time.Minute)
+		return nil
+	})
 }
 
 func runGuildStashSingle() error {
@@ -357,7 +510,9 @@ func runGuildStashSingle() error {
 	}
 
 	fmt.Println("Running guild stash monitoring...")
-	return guildstashtool.RunStashMonitoring(poeSessID, bplToken, guildId)
+	return runWithCredentialRetry(func() error {
+		return guildstashtool.RunStashMonitoring(poeSessID, bplToken, guildId)
+	})
 }
 
 func runGuildStashContinuous() error {
@@ -373,7 +528,9 @@ func runGuildStashContinuous() error {
 
 	fmt.Println("Starting continuous guild stash monitoring (every 5 minutes)...")
 	fmt.Println("Press Ctrl+C to stop")
-	return guildstashtool.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
+	return runWithCredentialRetry(func() error {
+		return guildstashtool.RunStashMonitoringContinuous(poeSessID, bplToken, guildId, 5*time.Minute)
+	})
 }
 
 func showRunModeMenu(toolName string, singleAction, continuousAction func() error) error {

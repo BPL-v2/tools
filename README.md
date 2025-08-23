@@ -67,8 +67,6 @@ We need the following input Parameters:
 2. Extract the zip file for your platform
 3. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
 
-**Note:** No setup required! The application will automatically prompt you for any missing environment variables when you try to use a feature that requires them, and it will save your inputs to the `.env` file for future use.
-
 ### Interactive Menu
 
 The tool provides an easy-to-use interactive menu:
@@ -82,21 +80,20 @@ The tool provides an easy-to-use interactive menu:
 
 ### Environment Variables
 
-The application uses environment variables stored in a `.env` file for configuration. The tool will automatically:
+The application uses environment variables stored in a `bpl-config.txt` file for configuration. The tool will automatically:
 
 - Prompt you for any missing required environment variables when you first use a feature
 - Offer to show detailed instructions on how to obtain each environment variable
-- Save your inputs to the `.env` file for future use
+- **Detect invalid credentials** and offer to re-enter them when API calls fail
+- Save your inputs to the `bpl-config.txt` file for future use
 - Use hidden input for sensitive values (tokens, session IDs)
-- Load existing values from the `.env` file on startup
+- Load existing values from the `bpl-config.txt` file on startup
 
 Required variables by feature:
 
 - **Check Player Names**: No environment variables required
 - **Handle Private League Invites**: `BPL_TOKEN`, `POESESSID`, `PRIVATE_LEAGUE_ID`
 - **Guild Stash Monitor**: `BPL_TOKEN`, `POESESSID`, `GUILD_ID`
-
-You can still manually edit the `.env` file if needed, or use the provided `.env.example` as a template.
 
 ## Development
 

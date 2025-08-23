@@ -69,13 +69,6 @@ jobs:
           - **Handle Private League Invites**: Automatically process private league invitations  
           - **Guild Stash Monitor**: Monitor guild stash changes and sync to BPL backend
 
-          ### What's New
-          - ✨ **Auto-setup**: No manual configuration required! The app will guide you through entering credentials
-          - 🔒 **Secure input**: Sensitive values are hidden while typing
-          - 💾 **Auto-save**: Credentials are automatically saved for future use
-          - 📋 **Built-in instructions**: Step-by-step guides for obtaining each credential
-          - 🎯 **Simplified releases**: Just download, extract, and run!
-
           ### Platform Downloads
           - **Windows**: `bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
           - **Linux**: `bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip`  
