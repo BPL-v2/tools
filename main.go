@@ -14,7 +14,6 @@ import (
 	"tools/handleprivateleagueinvites"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/joho/godotenv"
 )
 
 var (
@@ -27,10 +26,6 @@ var (
 
 func init() {
 	// Load environment variables from bpl-config.txt file
-	if err := godotenv.Load("bpl-config.txt"); err != nil {
-		log.Printf("Warning: bpl-config.txt file not found or could not be loaded: %v", err)
-	}
-
 	bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
 	bplToken = os.Getenv("BPL_TOKEN")
 	poeSessID = os.Getenv("POESESSID")
@@ -375,10 +370,7 @@ func runWithCredentialRetry(fn func() error) error {
 			return nil
 		}
 
-		fmt.Printf("DEBUG: Error occurred: %v\n", err)
 		credType, isCredError := isCredentialError(err)
-		fmt.Printf("DEBUG: Credential error detected: %v, Type: %s\n", isCredError, credType)
-
 		if !isCredError {
 			return err // Not a credential error, return original error
 		}
