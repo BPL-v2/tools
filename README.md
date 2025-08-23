@@ -64,8 +64,12 @@ We need the following input Parameters:
 ### For End Users
 
 1. Download the latest release from the [Releases page](https://github.com/BPL-v2/tools/releases)
-2. Extract the zip file for your platform
-3. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+2. Extract the zip file for your platform - this will create a `bpl-tools` folder
+3. Navigate to the `bpl-tools` folder
+4. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+5. Configuration will be automatically saved to `bpl-config.txt` in the same folder
+
+**Note:** No setup required! The application will automatically prompt you for any missing environment variables when you try to use a feature that requires them, and it will save your inputs to the `bpl-config.txt` file for future use.
 
 ### Interactive Menu
 

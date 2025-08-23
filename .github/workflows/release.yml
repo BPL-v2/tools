@@ -34,23 +34,26 @@ jobs:
 
       - name: Create release packages
         run: |
-          # Create temporary directories for each platform
-          mkdir -p temp-linux temp-windows temp-darwin-amd64 temp-darwin-arm64
+          # Create temporary directories for each platform with proper folder structure
+          mkdir -p bpl-tools-linux/bpl-tools
+          mkdir -p bpl-tools-windows/bpl-tools
+          mkdir -p bpl-tools-darwin-amd64/bpl-tools
+          mkdir -p bpl-tools-darwin-arm64/bpl-tools
 
-          # Copy and rename binaries to temporary directories
-          cp bpl-tools-linux-amd64 temp-linux/bpl-tools
-          cp bpl-tools-windows-amd64.exe temp-windows/bpl-tools.exe
-          cp bpl-tools-darwin-amd64 temp-darwin-amd64/bpl-tools
-          cp bpl-tools-darwin-arm64 temp-darwin-arm64/bpl-tools
+          # Copy binaries to platform-specific directories
+          cp bpl-tools-linux-amd64 bpl-tools-linux/bpl-tools/bpl-tools
+          cp bpl-tools-windows-amd64.exe bpl-tools-windows/bpl-tools/bpl-tools.exe
+          cp bpl-tools-darwin-amd64 bpl-tools-darwin-amd64/bpl-tools/bpl-tools
+          cp bpl-tools-darwin-arm64 bpl-tools-darwin-arm64/bpl-tools/bpl-tools
 
-          # Create zip archives from temporary directories
-          cd temp-linux && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools && cd ..
-          cd temp-windows && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools.exe && cd ..
-          cd temp-darwin-amd64 && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools && cd ..
-          cd temp-darwin-arm64 && zip ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools && cd ..
+          # Create zip archives with folder structure
+          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools-linux/
+          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools-windows/
+          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools-darwin-amd64/
+          zip -r bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools-darwin-arm64/
 
           # Clean up temporary directories
-          rm -rf temp-linux temp-windows temp-darwin-amd64 temp-darwin-arm64
+          rm -rf bpl-tools-linux bpl-tools-windows bpl-tools-darwin-amd64 bpl-tools-darwin-arm64
 
       - name: Generate release notes
         id: release_notes
@@ -60,9 +63,11 @@ jobs:
 
           ### Quick Start
           1. Download the appropriate zip file for your platform below
-          2. Extract the zip file  
-          3. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
-          4. The application will automatically prompt you for any required credentials when you first use each feature
+          2. Extract the zip file - this will create a `bpl-tools` folder
+          3. Navigate to the `bpl-tools` folder
+          4. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
+          5. The application will automatically prompt you for any required credentials when you first use each feature
+          6. Configuration will be saved in `bpl-config.txt` in the same folder
 
           ### Features
           - **Check Player Names**: Verify player names contain team abbreviations (no credentials required)
