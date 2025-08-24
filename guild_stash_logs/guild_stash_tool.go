@@ -38,7 +38,7 @@ type Client struct {
 	RateLimiter    *RateLimiter
 	SessionId      string
 	BplJwt         string
-	GuildId        string
+	GuildId        int
 	leagueStart    int64
 	leagueEnd      int64
 	rateLimitState string
@@ -66,16 +66,21 @@ func NewClient(sessionId, bplJwt string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch guild info: %w", err)
 	}
-	return &Client{
+	client := &Client{
 		RateLimiter: NewRateLimiter(),
 		SessionId:   sessionId,
 		BplJwt:      bplJwt,
-		GuildId:     guildInfo.ID,
-	}, nil
+		GuildId:     guildInfo.Id,
+	}
+	err = client.registerGuild(guildInfo)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to register guild: %w", err)
+	}
+	return client, nil
 }
 
 func (c *Client) getTimestamps() (*GuildStashLogTimestampResponse, error) {
-	url := fmt.Sprintf("%s/current/guilds/%s/stash-history/latest_timestamp", bplBaseUrl, c.GuildId)
+	url := fmt.Sprintf("%s/current/guilds/%d/stash-history/latest_timestamp", bplBaseUrl, c.GuildId)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -100,6 +105,27 @@ func (c *Client) getTimestamps() (*GuildStashLogTimestampResponse, error) {
 		return nil, err
 	}
 	return &timestamps, nil
+}
+
+func (c *Client) registerGuild(guildInfo *GuildInfo) error {
+	url := fmt.Sprintf("%s/current/guilds/%d", bplBaseUrl, c.GuildId)
+	body, err := json.Marshal(guildInfo)
+	if err != nil {
+		return fmt.Errorf("failed to marshal guild info: %w", err)
+	}
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", c.BplJwt))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to register guild: %s", res.Status)
+	}
+	return nil
 }
 
 func (c *Client) updateProgress(message string, currentTimestamp int64) {
@@ -139,7 +165,7 @@ func (c *Client) updateProgress(message string, currentTimestamp int64) {
 }
 
 func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newStart int64, latestId string, err error) {
-	url := fmt.Sprintf("https://www.pathofexile.com/api/guild/%s/stash/history?from=%d&end=%d", c.GuildId, end, start)
+	url := fmt.Sprintf("https://www.pathofexile.com/api/guild/%d/stash/history?from=%d&end=%d", c.GuildId, end, start)
 	if startId != "" {
 		url += fmt.Sprintf("&fromid=%s", startId)
 	}
@@ -198,7 +224,7 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 }
 
 func (c *Client) sendStashHistoryToBplBackend(body []byte) {
-	url := fmt.Sprintf("%s/current/guilds/%s/stash-history", bplBaseUrl, c.GuildId)
+	url := fmt.Sprintf("%s/current/guilds/%d/stash-history", bplBaseUrl, c.GuildId)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
@@ -232,7 +258,6 @@ func RunStashMonitoring(sessionId, bplJwt string) error {
 	if err != nil {
 		return fmt.Errorf("error getting latest timestamp: %w", err)
 	}
-	fmt.Print("\rTimestamps fetched successfully\n")
 
 	// Set league times for progress calculation
 	client.leagueStart = timestamps.LeagueStart
@@ -251,7 +276,7 @@ func RunStashMonitoring(sessionId, bplJwt string) error {
 	if err != nil {
 		return fmt.Errorf("error getting history: %w", err)
 	}
-	fmt.Print("\rGuild stash monitoring completed successfully          \n")
+	fmt.Print("\rGuild stash monitoring completed successfully\n")
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -13,7 +14,7 @@ import (
 
 // GuildInfo represents the parsed guild information
 type GuildInfo struct {
-	ID   string `json:"id"`
+	Id   int    `json:"id"`
 	Name string `json:"name"`
 	Tag  string `json:"tag"`
 }
@@ -73,7 +74,10 @@ func parseGuildInfo(htmlContent string) (*GuildInfo, error) {
 	guildIDRegex := regexp.MustCompile(`/guild/profile/(\d+)`)
 	matches := guildIDRegex.FindStringSubmatch(htmlContent)
 	if len(matches) > 1 {
-		guildInfo.ID = matches[1]
+		guildInfo.Id, err = strconv.Atoi(matches[1])
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert guild ID: %w", err)
+		}
 	}
 
 	// Extract guild name and tag using HTML parsing
@@ -124,7 +128,7 @@ func parseGuildInfo(htmlContent string) (*GuildInfo, error) {
 		return nil, fmt.Errorf("guild tag not found in HTML")
 	}
 
-	if guildInfo.ID == "" {
+	if guildInfo.Id == 0 {
 		return nil, fmt.Errorf("guild ID not found in HTML")
 	}
 
