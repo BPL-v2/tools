@@ -28,6 +28,7 @@ type User struct {
 type Team struct {
 	ID             int      `json:"id"`
 	Name           string   `json:"name"`
+	Abbreviation   string   `json:"abbreviation"`
 	AllowedClasses []string `json:"allowed_classes"`
 }
 
@@ -133,11 +134,13 @@ func CharacterCheck() error {
 	for _, entry := range ladderEntries {
 		if teamID, exists := userMap[entry.UserID]; exists {
 			if team, teamExists := teamMap[teamID]; teamExists {
-
-				teamShort := strings.ToLower(team.Name[:3])
+				teamShort := strings.ToLower(team.Abbreviation)
+				if teamShort == "" {
+					teamShort = strings.ToLower(team.Name[:3])
+				}
 				if !strings.Contains(strings.ToLower(entry.CharacterName), teamShort) && entry.Level >= 10 {
 					foundMismatch = true
-					fmt.Printf("Mismatch: Lvl %d %s does not contain %s abbrevation\n", entry.Level, entry.CharacterName, team.Name)
+					fmt.Printf("Mismatch: Lvl %d %s does not contain %s abbreviation\n", entry.Level, entry.CharacterName, team.Name)
 				}
 				if !slices.Contains(baseClasses, entry.Character.Ascendancy) &&
 					!slices.Contains(team.AllowedClasses, entry.Character.Ascendancy) {
