@@ -52,7 +52,7 @@ type User struct {
 
 type AcceptRequest struct {
 	Name  string `json:"name"`
-	Value int    `json:"value"`
+	Value string `json:"value"`
 }
 
 type Client struct {
@@ -106,10 +106,10 @@ func (c *Client) setPrivateLeagueId() error {
 	return nil
 }
 
-func (c *Client) getLeagueJoinRequests() ([]Member, error) {
+func (c *Client) getLeagueJoinRequests() ([]Member, []Member, error) {
 	req, err := http.NewRequest("GET", fmt.Sprintf("https://www.pathofexile.com/api/private-league-member/%s", c.PrivateLeagueId), nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	req.Header.Set("accept", "application/json")
@@ -126,36 +126,39 @@ func (c *Client) getLeagueJoinRequests() ([]Member, error) {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID invalid)", resp.StatusCode), resp.StatusCode)
+		return nil, nil, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID invalid)", resp.StatusCode), resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HttpStatusCode: %d from PoE API", resp.StatusCode)
+		return nil, nil, fmt.Errorf("HttpStatusCode: %d from PoE API", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var membersResp MembersResponse
 	err = json.Unmarshal(body, &membersResp)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var requestedMembers []Member
+	var acceptedMembers []Member
 	for _, member := range membersResp.Members {
 		if member.Role == "requested_invite" {
 			requestedMembers = append(requestedMembers, member)
+		} else {
+			acceptedMembers = append(acceptedMembers, member)
 		}
 	}
 
-	return requestedMembers, nil
+	return requestedMembers, acceptedMembers, nil
 }
 
 func (c *Client) getSortedUsers() (map[string]bool, error) {
@@ -205,7 +208,7 @@ func (c *Client) acceptPrivateLeagueInvites(members []Member) error {
 	for _, member := range members {
 		acceptRequests = append(acceptRequests, AcceptRequest{
 			Name:  "accept",
-			Value: member.ID,
+			Value: fmt.Sprintf("%d", member.ID),
 		})
 	}
 
@@ -213,15 +216,16 @@ func (c *Client) acceptPrivateLeagueInvites(members []Member) error {
 	if err != nil {
 		return err
 	}
-
 	req, err := http.NewRequest("POST", fmt.Sprintf("https://www.pathofexile.com/api/private-league-member/%s", c.PrivateLeagueId), bytes.NewBuffer(jsonData))
 	if err != nil {
 		return err
 	}
-
-	req.Header.Set("accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("content-type", "application/json")
-	req.Header.Set("user-agent", "Contact: Liberatorist@gmail.com")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Contact: Liberatorist@gmail.com")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	req.AddCookie(&http.Cookie{Name: "POESESSID", Value: c.PoeSessID})
 
 	resp, err := c.Client.Do(req)
@@ -247,19 +251,25 @@ func (c *Client) HandlePrivateLeagueInvites() error {
 	if err != nil {
 		return fmt.Errorf("failed to get sorted users: %w", err)
 	}
-
-	guildRequests, err := c.getLeagueJoinRequests()
+	guildRequests, acceptedMembers, err := c.getLeagueJoinRequests()
 	if err != nil {
 		return fmt.Errorf("failed to get guild join requests: %w", err)
 	}
-
 	var membersToAdd []Member
 	var unknownUsers []string
 
 	for _, member := range guildRequests {
 		if sortedUsers[member.MemberName] && member.IsAcceptable {
+			fmt.Printf("Accepting invite for user: %s\n", member.MemberName)
 			membersToAdd = append(membersToAdd, member)
 		} else if !sortedUsers[member.MemberName] {
+			fmt.Printf("User %s is not sorted yet.\n", member.MemberName)
+			unknownUsers = append(unknownUsers, member.MemberName)
+		}
+	}
+	for _, member := range acceptedMembers {
+		if !sortedUsers[member.MemberName] {
+			fmt.Printf("User %s was accepted but is not sorted.\n", member.MemberName)
 			unknownUsers = append(unknownUsers, member.MemberName)
 		}
 	}
