@@ -258,6 +258,7 @@ func (c *Client) HandlePrivateLeagueInvites() error {
 	var membersToAdd []Member
 	var unknownUsers []string
 
+	fmt.Printf("Found %d requested invites and %d accepted members.\n", len(guildRequests), len(acceptedMembers))
 	for _, member := range guildRequests {
 		if sortedUsers[member.MemberName] && member.IsAcceptable {
 			fmt.Printf("Accepting invite for user: %s\n", member.MemberName)
