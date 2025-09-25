@@ -260,10 +260,14 @@ func (c *Client) HandlePrivateLeagueInvites() error {
 
 	fmt.Printf("Found %d requested invites and %d accepted members.\n", len(guildRequests), len(acceptedMembers))
 	for _, member := range guildRequests {
-		if sortedUsers[member.MemberName] && member.IsAcceptable {
-			fmt.Printf("Accepting invite for user: %s\n", member.MemberName)
-			membersToAdd = append(membersToAdd, member)
-		} else if !sortedUsers[member.MemberName] {
+		if sortedUsers[member.MemberName] {
+			if member.IsAcceptable {
+				fmt.Printf("Accepting invite for user: %s\n", member.MemberName)
+				membersToAdd = append(membersToAdd, member)
+			} else {
+				fmt.Printf("User %s is sorted but not acceptable.\n", member.MemberName)
+			}
+		} else {
 			fmt.Printf("User %s is not sorted yet.\n", member.MemberName)
 			unknownUsers = append(unknownUsers, member.MemberName)
 		}
