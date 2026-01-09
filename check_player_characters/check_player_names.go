@@ -142,7 +142,8 @@ func CharacterCheck() error {
 					foundMismatch = true
 					fmt.Printf("Mismatch: Lvl %d %s does not contain %s abbreviation\n", entry.Level, entry.CharacterName, team.Name)
 				}
-				if !slices.Contains(baseClasses, entry.Character.Ascendancy) &&
+				if entry.Character.Ascendancy != "" &&
+					!slices.Contains(baseClasses, entry.Character.Ascendancy) &&
 					!slices.Contains(team.AllowedClasses, entry.Character.Ascendancy) {
 					fmt.Printf("Mismatch: %s has an invalid ascendancy: %s\n", entry.CharacterName, entry.Character.Ascendancy)
 				}
