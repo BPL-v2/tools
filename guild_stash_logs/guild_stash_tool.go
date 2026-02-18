@@ -319,10 +319,12 @@ func RunStashMonitoringContinuous(sessionId, bplJwt string, interval time.Durati
 	if err != nil {
 		return err
 	}
-
+	if timestamps.Latest == nil {
+		timestamps.Latest = &timestamps.LeagueStart
+	}
 	for {
-		_, _, err = client.getHistoryBetween(dayAfterLeagueEnd, *timestamps.Latest, "")
 		now := time.Now().Unix()
+		_, _, err = client.getHistoryBetween(dayAfterLeagueEnd, *timestamps.Latest, "")
 		timestamps.Latest = &now
 		if err != nil {
 			return err
