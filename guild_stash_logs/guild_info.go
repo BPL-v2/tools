@@ -33,8 +33,27 @@ func FetchGuildInfo(sessionID string) (*GuildInfo, error) {
 	}
 
 	// Add headers to mimic browser request
+	req.Header.Add("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	req.Header.Add("accept-language", "en-US,en;q=0.6")
+	req.Header.Add("cache-control", "no-cache")
+	req.Header.Add("pragma", "no-cache")
+	req.Header.Add("sec-ch-ua", `"Not:A-Brand";v="99", "Brave";v="145", "Chromium";v="145"`)
+	req.Header.Add("sec-ch-ua-mobile", "?0")
+	req.Header.Add("sec-ch-ua-platform", `"Windows"`)
+	req.Header.Add("sec-fetch-dest", "document")
+	req.Header.Add("sec-fetch-mode", "navigate")
+	req.Header.Add("sec-fetch-site", "none")
+	req.Header.Add("sec-fetch-user", "?1")
+	req.Header.Add("sec-gpc", "1")
+	req.Header.Add("upgrade-insecure-requests", "1")
 	req.Header.Add("user-agent", "Contact: liberatorist@gmail.com")
+	req.Header.Add("POESESSID", sessionID)
 	req.Header.Add("Cookie", fmt.Sprintf("POESESSID=%s", sessionID))
+	req.AddCookie(&http.Cookie{
+		Name:  "POESESSID",
+		Value: sessionID,
+	})
+
 	// Make request
 	resp, err := client.Do(req)
 	if err != nil {
@@ -57,7 +76,6 @@ func FetchGuildInfo(sessionID string) (*GuildInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse guild info: %w", err)
 	}
-
 	return guildInfo, nil
 }
 

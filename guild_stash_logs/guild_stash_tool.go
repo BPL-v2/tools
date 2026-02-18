@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
+var bplBaseUrl = "https://bpl-poe.com/api"
 
 // var bplBaseUrl = "http://localhost:8000/api"
 
@@ -123,7 +123,10 @@ func (c *Client) registerGuild(guildInfo *GuildInfo) error {
 		return err
 	}
 	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to register guild: %s", res.Status)
+		// print response body for debugging
+		body, _ := io.ReadAll(res.Body)
+		fmt.Printf("Response body: %s\n", string(body))
+		return fmt.Errorf("failed to register guild: %s - You are not registered as a team lead", res.Status)
 	}
 	return nil
 }
@@ -176,10 +179,32 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 		return 0, latestId, err
 	}
 
+	req.Header.Add("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+	req.Header.Add("accept-language", "en-US,en;q=0.6")
+	req.Header.Add("cache-control", "no-cache")
+	req.Header.Add("pragma", "no-cache")
+	req.Header.Add("sec-ch-ua", `"Not:A-Brand";v="99", "Brave";v="145", "Chromium";v="145"`)
+	req.Header.Add("sec-ch-ua-mobile", "?0")
+	req.Header.Add("sec-ch-ua-platform", `"Windows"`)
+	req.Header.Add("sec-fetch-dest", "document")
+	req.Header.Add("sec-fetch-mode", "navigate")
+	req.Header.Add("sec-fetch-site", "none")
+	req.Header.Add("sec-fetch-user", "?1")
+	req.Header.Add("sec-gpc", "1")
+	req.Header.Add("upgrade-insecure-requests", "1")
 	req.Header.Add("user-agent", "Contact: liberatorist@gmail.com")
+	req.Header.Add("POESESSID", c.SessionId)
 	req.Header.Add("Cookie", fmt.Sprintf("POESESSID=%s", c.SessionId))
+	req.AddCookie(&http.Cookie{
+		Name:  "POESESSID",
+		Value: c.SessionId,
+	})
 
 	resp, err := http.DefaultClient.Do(req)
+	// print body
+	fmt.Printf("Response status: %s\n", resp.Status)
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Printf("Response body: %s\n", string(body))
 	if err != nil {
 		return 0, latestId, err
 	}
@@ -192,17 +217,17 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 		return 0, latestId, fmt.Errorf("HttpStatusCode: %d (Too many requests - Wait %v before trying again)", resp.StatusCode, duration)
 	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return 0, latestId, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID most likely invalid)", resp.StatusCode), resp.StatusCode)
+		return 0, latestId, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID most likely invalid or you are not a guild officer)", resp.StatusCode), resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return 0, latestId, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID most likely invalid)", resp.StatusCode), resp.StatusCode)
+		return 0, latestId, NewCredentialError("poe_session", fmt.Sprintf("HttpStatusCode: %d (PoE Session ID most likely invalid or you are not a guild officer)", resp.StatusCode), resp.StatusCode)
 	}
 
 	if updateErr := c.RateLimiter.UpdateFromResponse(resp); updateErr != nil {
 		fmt.Printf("Warning: Could not update rate limiter: %v\n", updateErr)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, _ = io.ReadAll(resp.Body)
 	unmarshalled := GuildStashChangeResponse{}
 	err = json.Unmarshal(body, &unmarshalled)
 	if err != nil {

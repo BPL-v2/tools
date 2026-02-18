@@ -72,7 +72,7 @@ func NewClient(poeSessID, bplToken string) (*Client, error) {
 		Client:    &http.Client{},
 		PoeSessID: poeSessID,
 		BPLToken:  bplToken,
-		BPLUrl:    "https://v2202503259898322516.goodsrv.de/api",
+		BPLUrl:    "https://bpl-poe.com/api",
 	}
 	err := client.setPrivateLeagueId()
 	if err != nil {

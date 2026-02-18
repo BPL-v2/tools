@@ -41,7 +41,7 @@ var baseClasses = []string{
 	"Witch",
 	"Duelist",
 }
-var bplBaseUrl = "https://v2202503259898322516.goodsrv.de/api"
+var bplBaseUrl = "https://bpl-poe.com/api"
 
 func getTeams() ([]Team, error) {
 	resp, err := http.Get(bplBaseUrl + "/events/current/teams")
