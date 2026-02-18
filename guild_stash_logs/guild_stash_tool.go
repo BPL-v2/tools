@@ -225,7 +225,6 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 
 	body, _ := io.ReadAll(resp.Body)
 	unmarshalled := GuildStashChangeResponse{}
-	fmt.Printf("Body: %s\n", string(body))
 	err = json.Unmarshal(body, &unmarshalled)
 	if err != nil {
 		return 0, latestId, err
