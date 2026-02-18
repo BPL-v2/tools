@@ -201,10 +201,6 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 	})
 
 	resp, err := http.DefaultClient.Do(req)
-	// print body
-	fmt.Printf("Response status: %s\n", resp.Status)
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("Response body: %s\n", string(body))
 	if err != nil {
 		return 0, latestId, err
 	}
@@ -227,8 +223,9 @@ func (c *Client) getHistoryBetween(start int64, end int64, startId string) (newS
 		fmt.Printf("Warning: Could not update rate limiter: %v\n", updateErr)
 	}
 
-	body, _ = io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	unmarshalled := GuildStashChangeResponse{}
+	fmt.Printf("Body: %s\n", string(body))
 	err = json.Unmarshal(body, &unmarshalled)
 	if err != nil {
 		return 0, latestId, err
