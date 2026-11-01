@@ -10,86 +10,91 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            rust-target: aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            rust-target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libdbus-1-dev patchelf
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          go-version: "1.24"
+          node-version: lts/*
+          cache: npm
 
-      - name: Get version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Build binaries
-        run: |
-          # Build for multiple platforms
-          GOOS=linux GOARCH=amd64 go build -o bpl-tools-linux-amd64 .
-          GOOS=windows GOARCH=amd64 go build -o bpl-tools-windows-amd64.exe .
-          GOOS=darwin GOARCH=amd64 go build -o bpl-tools-darwin-amd64 .
-          GOOS=darwin GOARCH=arm64 go build -o bpl-tools-darwin-arm64 .
-
-      - name: Create release packages
-        run: |
-          # Create temporary directories for each platform with proper folder structure
-          mkdir -p temp-linux/bpl-tools
-          mkdir -p temp-windows/bpl-tools
-          mkdir -p temp-darwin-amd64/bpl-tools
-          mkdir -p temp-darwin-arm64/bpl-tools
-
-          # Copy binaries to platform-specific directories
-          cp bpl-tools-linux-amd64 temp-linux/bpl-tools/bpl-tools
-          cp bpl-tools-windows-amd64.exe temp-windows/bpl-tools/bpl-tools.exe
-          cp bpl-tools-darwin-amd64 temp-darwin-amd64/bpl-tools/bpl-tools
-          cp bpl-tools-darwin-arm64 temp-darwin-arm64/bpl-tools/bpl-tools
-
-          # Create zip archives with folder structure
-          cd temp-linux && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip bpl-tools/ && cd ..
-          cd temp-windows && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip bpl-tools/ && cd ..
-          cd temp-darwin-amd64 && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip bpl-tools/ && cd ..
-          cd temp-darwin-arm64 && zip -r ../bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip bpl-tools/ && cd ..
-
-          # Clean up temporary directories
-
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          cat > release_notes.md << 'EOF'
-          ## BPL Tools ${{ steps.version.outputs.VERSION }}
-
-          ### Quick Start
-          1. Download the appropriate zip file for your platform below
-          2. Extract the zip file - this will create a `bpl-tools` folder
-          3. Navigate to the `bpl-tools` folder
-          4. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
-          5. The application will automatically prompt you for any required credentials when you first use each feature
-          6. Configuration will be saved in `bpl-config.txt` in the same folder
-
-          ### Features
-          - **Check Player Names**: Verify player names contain team abbreviations (no credentials required)
-          - **Handle Private League Invites**: Automatically process private league invitations  
-          - **Guild Stash Monitor**: Monitor guild stash changes and sync to BPL backend
-
-          ### Platform Downloads
-          - **Windows**: `bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
-          - **Linux**: `bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip`  
-          - **macOS Intel**: `bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip`
-          - **macOS Apple Silicon**: `bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip`
-          EOF
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          tag_name: ${{ steps.version.outputs.VERSION }}
-          name: BPL Tools ${{ steps.version.outputs.VERSION }}
-          body_path: release_notes.md
-          files: |
-            bpl-tools-${{ steps.version.outputs.VERSION }}-linux-amd64.zip
-            bpl-tools-${{ steps.version.outputs.VERSION }}-windows-amd64.zip
-            bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-amd64.zip
-            bpl-tools-${{ steps.version.outputs.VERSION }}-darwin-arm64.zip
-          draft: false
+          targets: ${{ matrix.rust-target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run tests
+        if: runner.os == 'Linux'
+        run: |
+          npm test
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Set app version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}" node -e '
+            const fs = require("fs");
+            const path = "src-tauri/tauri.conf.json";
+            const config = JSON.parse(fs.readFileSync(path, "utf8"));
+            config.version = process.env.VERSION;
+            fs.writeFileSync(path, JSON.stringify(config, null, 2));
+          '
+
+      - name: Build and upload release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: BPL Tools ${{ github.ref_name }}
+          releaseBody: |
+            ### Quick Start
+            1. Download the installer for your platform below
+            2. Install and start BPL Tools
+            3. The application asks for any required credentials when you first use each feature
+
+            ### Features
+            - **Check Player Characters**: Verify character names and ascendancies (no credentials required)
+            - **Private League Invites**: Automatically process private league invitations
+            - **Guild Stash Logs**: Sync guild stash changes to the BPL backend
+
+            ### Platform Downloads
+            - **Windows**: `.msi` or `-setup.exe`
+            - **Linux**: `.AppImage`, `.deb` or `.rpm`
+            - **macOS Intel**: `x64.dmg`
+            - **macOS Apple Silicon**: `aarch64.dmg`
+          releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}

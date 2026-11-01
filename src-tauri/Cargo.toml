@@ -1,0 +1,27 @@
+[package]
+name = "bpl-tools"
+version = "0.1.0"
+description = "Admin tools for BPL"
+edition = "2024"
+
+[lib]
+name = "bpl_tools_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+keyring = "4.2.0"
+regex = "1.13.1"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "query", "rustls"] }
+scraper = "0.29.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tauri = { version = "2.12.5", features = [] }
+tauri-plugin-opener = "2.7.2"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["time"] }
+
+[build-dependencies]
+tauri-build = { version = "2.7.4", features = [] }
+
+[dev-dependencies]
+tempfile = "3.27.0"
