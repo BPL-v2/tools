@@ -1,5 +1,7 @@
 # Tools for BPL Admins
 
+A desktop app built with [Tauri](https://tauri.app/), using the same React + Tailwind + daisyUI stack as the BPL frontend.
+
 ## Requirements
 
 We need the following input Parameters:
@@ -8,15 +10,16 @@ We need the following input Parameters:
   - This is EXTREMELY sensitive data. In fact it's already kind of sketchy that we are asking you to give it to this tool as an input. Please check out the code to see how we are actually using it.
 - BPL JWT
   - This is your token to authenticate yourself against the BPL Backend
-- Guild ID
-  - This is the internal ID of your guild
+
+The guild ID and private league ID are detected automatically.
 
 # How to get the parameters:
 
+The app walks you through both of these, including where to click in your browser.
+
 ## PoE Session ID
 
-- Navigate to https://www.pathofexile.com/
-- Make sure you are logged in
+- Log in on https://www.pathofexile.com/my-account
 - Press F12 to open dev tools
 - Go to Application (Chromium) / Storage (Firefox)
 - Go to Cookies for https://www.pathofexile.com/
@@ -24,76 +27,55 @@ We need the following input Parameters:
 
 ## BPL JWT
 
-- Navigate to https://bpl-poe.com/
-- Make sure you are logged in
-- Press F12 to open dev tools
-- Go to Application (Chromium) / Storage (Firefox)
-- Go to Local storage for https://bpl-poe.com/
-- Select value for auth
-
-## Guild ID
-
-- Navigate to https://www.pathofexile.com/my-guild
-- Click on "Stash History"
-- Your Browser URL should now look like this: https://www.pathofexile.com/guild/profile/408208/stash-history
-- The number between profile and stash-history is your guild id
-
-## Private League ID
-
-- Navigate to https://www.pathofexile.com/private-leagues
-- Click view on your league
-- It will be named "YourLeagueName (PL12345)
-- The number after PL is your league id
+- Open https://bpl-poe.com/token and log in if asked
+- Click Copy
 
 ## Usage
 
 ### For End Users
 
-1. Download the latest release from the [Releases page](https://github.com/BPL-v2/tools/releases)
-2. Extract the zip file for your platform - this will create a `bpl-tools` folder
-3. Navigate to the `bpl-tools` folder
-4. Run the tool: `./bpl-tools` (Linux/macOS) or `bpl-tools.exe` (Windows)
-5. Configuration will be automatically saved to `bpl-config.txt` in the same folder
+1. Download the installer for your platform from the [Releases page](https://github.com/BPL-v2/tools/releases)
+2. Install and start BPL Tools
+3. Pick a tool in the sidebar, then choose **Run Once** or **Run Continuously** (every 5 minutes)
 
-**Note:** No setup required! The application will automatically prompt you for any missing environment variables when you try to use a feature that requires them, and it will save your inputs to the `bpl-config.txt` file for future use.
+**Note:** No setup required! When a tool needs a credential that is missing or was rejected, the app asks for it, shows step-by-step instructions, and retries the run. You can also manage both values on the **Credentials** page.
 
-### Interactive Menu
+### Credentials
 
-The tool provides an easy-to-use interactive menu:
+Credentials are stored in your system keychain: Keychain on macOS, Credential Manager on Windows and the Secret Service (KWallet, GNOME Keyring) on Linux. They stay in the Rust backend, the UI can only see whether they are set.
 
-- Use ↑/↓ arrow keys to navigate
-- Press Enter to select
-- Choose your tool, then choose run mode (once or continuous)
-- When using a feature for the first time, you'll be prompted to enter required credentials
-- The application will offer to show step-by-step instructions for obtaining each credential
-- Sensitive values (tokens, session IDs) are hidden while typing for security
+An existing `bpl-config.txt` from an older version is moved into the keychain on launch and deleted afterwards. The app looks for it in its config directory, next to the app and in the directory it was started from.
 
-### Environment Variables
-
-The application uses environment variables stored in a `bpl-config.txt` file for configuration. The tool will automatically:
-
-- Prompt you for any missing required environment variables when you first use a feature
-- Offer to show detailed instructions on how to obtain each environment variable
-- **Detect invalid credentials** and offer to re-enter them when API calls fail
-- Save your inputs to the `bpl-config.txt` file for future use
-- Use hidden input for sensitive values (tokens, session IDs)
-- Load existing values from the `bpl-config.txt` file on startup
+If no keychain is available, credentials are kept unencrypted in `bpl-config.txt` in the app's config directory, readable only by your user on Linux and macOS. The Credentials page warns you when this happens, and the values move to the keychain once one is available.
 
 Required variables by feature:
 
-- **Check Player Characters**: No environment variables required
-- **Handle Private League Invites**: `BPL_TOKEN`, `POESESSID`
-- **Guild Stash Monitor**: `BPL_TOKEN`, `POESESSID`
+- **Check Player Characters**: No credentials required
+- **Private League Invites**: `BPL_TOKEN`, `POESESSID`
+- **Guild Stash Logs**: `BPL_TOKEN`, `POESESSID`
 
 ## Development
 
-### Building from Source
+You need Node.js, a Rust toolchain and the [Tauri system dependencies](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 git clone https://github.com/BPL-v2/tools.git
 cd tools
-go build -o bpl-tools .
+npm install
+npm run tauri dev    # run the app with hot reload
+npm run tauri build  # build installers for the current platform
 ```
+
+Tests:
+
+```bash
+npm test
+cargo test --manifest-path src-tauri/Cargo.toml
+# also check the models against the production API
+cargo test --manifest-path src-tauri/Cargo.toml -- --ignored
+```
+
+The UI lives in `src/`, the tools and all network access in `src-tauri/src/`. Tools report back to the UI through `tool-event` events, see `src-tauri/src/jobs.rs`.
 
 ### Creating a Release
 
@@ -111,7 +93,6 @@ git push
 
 This will automatically:
 
-- Build binaries for all platforms (Linux, Windows, macOS Intel/ARM)
-- Create simplified zip packages with just the executable
+- Build installers for all platforms (Linux, Windows, macOS Intel/ARM)
 - Create a GitHub release with download links
 - Generate release notes with quick start instructions
