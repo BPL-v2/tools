@@ -25,7 +25,7 @@ export function App() {
       <nav className="flex w-64 shrink-0 flex-col border-r-2 border-base-content/20 bg-base-200">
         <div className="flex items-center gap-3 p-4">
           <img src={logo} alt="" className="h-10" />
-          <h1 className="text-lg font-bold">BPL Tools</h1>
+          <h1 className="text-lg font-bold">BPL Tools!</h1>
         </div>
         <ul className="menu w-full flex-1">
           {TOOLS.map(({ id, name }) => (
