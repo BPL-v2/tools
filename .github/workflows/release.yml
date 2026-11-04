@@ -76,6 +76,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the updater artifacts; the public key is in tauri.conf.json
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: BPL Tools ${{ github.ref_name }}
@@ -84,6 +87,8 @@ jobs:
             1. Download the installer for your platform below
             2. Install and start BPL Tools
             3. The application asks for any required credentials when you first use each feature
+
+            Installed apps update themselves: they offer new releases in-app.
 
             ### Features
             - **Check Player Characters**: Verify character names and ascendancies (no credentials required)

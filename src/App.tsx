@@ -5,6 +5,7 @@ import logo from "./assets/bpl-logo.png";
 import { CredentialDialog } from "./components/credential-dialog";
 import { SettingsPage } from "./components/settings-page";
 import { ThemeToggle } from "./components/theme-toggle";
+import { UpdateBanner } from "./components/update-banner";
 import { ToolPage } from "./components/tool-page";
 import type { Tool } from "./lib/api";
 import { isActive } from "./lib/tool-state";
@@ -60,6 +61,7 @@ export function App() {
       </nav>
 
       <main className="flex-1 overflow-y-auto p-6">
+        <UpdateBanner />
         {tool ? (
           <ToolPage
             tool={tool}
